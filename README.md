@@ -260,18 +260,6 @@ python main_audio.py
 
 ---
 
-
-<table align="center">
-<tr>
-<td align="center"><img src="https://img.shields.io/badge/-Yeswanth%20Ram-6C5CE7?style=for-the-badge&logo=github&logoColor=white"></td>
-<td align="center"><img src="https://img.shields.io/badge/-BharaniDharan%20-00CEC9?style=for-the-badge&logo=github&logoColor=white"></td>
-<td align="center"><img src="https://img.shields.io/badge/-AsikKani%20-FDCB6E?style=for-the-badge&logo=github&logoColor=white"></td>
-<td align="center"><img src="https://img.shields.io/badge/-Logesh%20-FF7675?style=for-the-badge&logo=github&logoColor=white"></td>
-</tr>
-</table>
-
----
-
 ## 👨‍💻 Project Collaborators
 
 <table align="center">
@@ -305,6 +293,17 @@ python main_audio.py
 <img src="https://img.shields.io/badge/Focus-Accessible%20Technology-blue?style=for-the-badge">
 
 </div>
+
+---
+
+
+<table align="center">
+<tr>
+<td align="center"><img src="https://img.shields.io/badge/-Yeswanth%20Ram-6C5CE7?style=for-the-badge&logo=github&logoColor=white"></td>
+<td align="center"><img src="https://img.shields.io/badge/-Raghavan%20-00CEC9?style=for-the-badge&logo=github&logoColor=white"></td>
+<td align="center"><img src="https://img.shields.io/badge/-VetriSelvan%20-FDCB6E?style=for-the-badge&logo=github&logoColor=white"></td>
+</tr>
+</table>
 
 ---
 
