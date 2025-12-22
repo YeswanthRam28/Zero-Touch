@@ -282,7 +282,7 @@ python main_audio.py
 </tr>
 <tr>
 <td><b>🎯 Vision & Gaze Lead</b><br/><i>Gesture Tracking, Eye Tracking, Visual Feedback</i></td>
-<td><b>Raghavan S</b></td>
+<td><b>Raghavan</b></td>
 <td><a href="https://github.com/Raghavan7777"><img src="https://img.shields.io/badge/GitHub-Profile-181717?style=flat-square&logo=github"></a></td>
 </tr>
 <tr>
