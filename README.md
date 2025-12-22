@@ -240,19 +240,6 @@ python main_audio.py
 
 ## 📸 Project Components
 
-### Core Modules
-
-* **`main_audio.py`** - Main voice control interface
-* **`audio_engine/`** - Voice recognition and TTS
-  * `tts_engine.py` - Text-to-speech processing
-  * `state_manager.py` - Context and state management
-* **`vision/`** - Computer vision components
-  * `yolo_engine.py` - Object detection
-  * `vision_bridge.py` - Vision-voice integration
-* **`example_vision_integration.py`** - Integration examples
-
----
-
 ## 🎯 Use Cases
 
 * **Sterile Surgical Procedures**: Navigate medical imaging without breaking sterility
