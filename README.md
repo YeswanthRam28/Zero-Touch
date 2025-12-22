@@ -297,18 +297,18 @@ python main_audio.py
 </tr>
 <tr>
 <td><b>🎯 Vision & Gaze Lead</b><br/><i>Gesture Tracking, Eye Tracking, Visual Feedback</i></td>
-<td><b>[Team Member Name]</b></td>
-<td><a href="https://github.com/[username]"><img src="https://img.shields.io/badge/GitHub-Profile-181717?style=flat-square&logo=github"></a></td>
+<td><b>Raghavan S</b></td>
+<td><a href="https://github.com/Raghavan7777"><img src="https://img.shields.io/badge/GitHub-Profile-181717?style=flat-square&logo=github"></a></td>
 </tr>
 <tr>
 <td><b>🎙️ Audio & Intent Lead</b><br/><i>Voice Recognition, Command Parsing, AI Integration</i></td>
-<td><b>[Team Member Name]</b></td>
-<td><a href="https://github.com/[username]"><img src="https://img.shields.io/badge/GitHub-Profile-181717?style=flat-square&logo=github"></a></td>
+<td><b>Yeswanth Ram</b></td>
+<td><a href="https://github.com/Yeswanthram28"><img src="https://img.shields.io/badge/GitHub-Profile-181717?style=flat-square&logo=github"></a></td>
 </tr>
 <tr>
 <td><b>🧠 Fusion & Integration Lead</b><br/><i>Multimodal Fusion, System Integration, Testing</i></td>
-<td><b>[Team Member Name]</b></td>
-<td><a href="https://github.com/[username]"><img src="https://img.shields.io/badge/GitHub-Profile-181717?style=flat-square&logo=github"></a></td>
+<td><b>VetriSelvan</b></td>
+<td><a href="https://github.com/njr-vetri"><img src="https://img.shields.io/badge/GitHub-Profile-181717?style=flat-square&logo=github"></a></td>
 </tr>
 </table>
 
