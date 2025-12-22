@@ -2,12 +2,6 @@
 
 # 🧠 Zero-Touch – Multimodal Surgeon Assistant
 
-</div>
-
-# DATAQUEST / Hackathon Edition
-
-<div align="center">
-
 ![Zero-Touch](https://img.shields.io/badge/Zero--Touch-Surgical%20Intelligence-blueviolet?style=for-the-badge&logo=medical-cross&logoColor=white)
 
 **🏥 Gesture + Gaze + Voice Controlled Surgical Assistant**
