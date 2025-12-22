@@ -1,4 +1,8 @@
+<div align="center">
+
 # 🧠 Zero-Touch – Multimodal Surgeon Assistant
+
+</div>
 
 # DATAQUEST / Hackathon Edition
 
