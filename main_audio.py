@@ -3,6 +3,10 @@ import logging
 import time
 import sys
 import threading
+from typing import Optional
+from fastapi import FastAPI, Body
+from pydantic import BaseModel
+import uvicorn
 
 # Import our modules
 from audio_engine.audio_capture import AudioCapture
@@ -20,105 +24,188 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-logger = logging.getLogger("MainLoop")
+logger = logging.getLogger("AudioAPI")
 
-class AudioAssistant:
+# --- Models ---
+class IntentRequest(BaseModel):
+    text: str
+
+class AssistantState:
     def __init__(self):
-        logger.info("Initializing Zero-Touch Audio Assistant...")
+        self.asr_loaded = False
+        self.llm_loaded = False
+        self.tts_loaded = False
         
         # Initialize modules
-        self.state_manager = StateManager()
-        self.vision_bridge = get_bridge()
-        self.vision_bridge.register_state_manager(self.state_manager)
-        self.tts = TTSEngine(use_coqui=True) # Set True if Coqui installed
-        self.capture = AudioCapture(duration=3.0, threshold=0.01)
-        self.asr = ASREngine(model_size="tiny") # or tiny.en
-        self.intent_parser = IntentEngine(llm_model_path="D:\LLM\models\phi-2\phi-2.Q4_K_M.gguf") # Add path if available
-        
-        self.running = False
-
-    def start(self):
-        self.running = True
-        logger.info("System Ready. Listening...")
-        self.tts.speak("System Ready. Listening.")
-        
         try:
-            while self.running:
-                # 1. Capture Audio
-                audio_buffer = self.capture.listen_chunk()
-                
-                if audio_buffer is not None:
-                    # 2. Transcribe
-                    transcript_data = self.asr.transcribe(audio_buffer)
-                    text = transcript_data.get("text", "")
-                    confidence = transcript_data.get("confidence", 0.0)
-                    
-                    if not text or len(text) < 2:
-                        continue
-                        
-                    logger.info(f"User said: {text} (Conf: {confidence:.2f})")
-                    
-                    # 3. Intent Parsing
-                    intent_packet = self.intent_parser.parse(text)
-                    intent = intent_packet.get("intent")
-                    
-                    # Safety check for malformed LLM responses
-                    if not intent or intent == "":
-                        self.tts.speak("I didn't understand that. Please say a surgical command or greeting.")
-                        logger.warning(f"Malformed intent packet: {intent_packet}")
-                        continue
-                    
-                    # Handle conversational inputs
-                    if intent == "CHAT":
-                        responses = {
-                            "hello": "Hello! I'm ready to assist.",
-                            "hi": "Hi there!",
-                            "hey": "Hey! How can I help?",
-                            "bye": "Goodbye!",
-                            "goodbye": "See you later!",
-                        }
-                        response = responses.get(text.strip().lower().rstrip('.!?'), "I'm here to help with surgical commands.")
-                        self.tts.speak(response)
-                        logger.info(f"CHAT: {response}")
-                        continue
-                    
-                    if intent == "UNKNOWN":
-                        self.tts.speak("I didn't understand that. Please say a surgical command or greeting.")
-                        logger.info("UNKNOWN intent - no action taken")
-                        continue
-                        
-                    # 4. State Validation
-                    is_valid, msg = self.state_manager.validate_command(intent_packet)
-                    
-                    if is_valid:
-                        # 5. Execution via VisionBridge
-                        success, msg = self.vision_bridge.execute_action(intent, intent_packet)
-                        
-                        if success:
-                            logger.info(f"EXECUTED: {intent} - {msg}")
-                            self.tts.speak(f"Executing {intent.replace('_', ' ').lower()}.")
-                        else:
-                            logger.error(f"EXECUTION FAILED: {intent} - {msg}")
-                            self.tts.speak(f"Failed to execute {intent.replace('_', ' ').lower()}.")
-                        
-                        # Update state if needed (e.g., if user said "Load Image")
-                        # self.state_manager.update_state(...)
-                    else:
-                        logger.warning(f"Command Blocked: {msg}")
-                        self.tts.speak(msg)
-                        
-                else:
-                    # Silence - just loop or sleep tiny bit
-                    time.sleep(0.1)
-                    
-        except KeyboardInterrupt:
-            logger.info("Stopping...")
-            self.stop()
+            self.state_manager = StateManager()
+            self.vision_bridge = get_bridge()
+            self.vision_bridge.register_state_manager(self.state_manager)
+            
+            self.tts = TTSEngine(use_coqui=True)
+            self.tts_loaded = True
+            
+            self.capture = AudioCapture(duration=3.0, threshold=0.01)
+            
+            self.asr = ASREngine(model_size="tiny")
+            self.asr_loaded = True
+            
+            # Note: IntentEngine initialization might be slow due to LLM loading
+            self.intent_parser = IntentEngine(llm_model_path="D:\\LLM\\models\\phi-2\\phi-2.Q4_K_M.gguf")
+            self.llm_loaded = True
+            
+            logger.info("All engines loaded successfully.")
+        except Exception as e:
+            logger.error(f"Error during initialization: {e}")
 
-    def stop(self):
-        self.running = False
-        logger.info("System Stopped.")
+# Global state
+app = FastAPI(title="Zero-Touch Voice API")
+assistant = None
+
+@app.on_event("startup")
+def startup_event():
+    global assistant
+    assistant = AssistantState()
+
+# --- Endpoints ---
+
+@app.get("/health")
+def get_health():
+    """System Health & Readiness"""
+    return {
+        "status": "ready" if (assistant and assistant.llm_loaded) else "initializing",
+        "asr": "loaded" if (assistant and assistant.asr_loaded) else "failed/loading",
+        "llm": "loaded" if (assistant and assistant.llm_loaded) else "failed/loading",
+        "tts": "loaded" if (assistant and assistant.tts_loaded) else "failed/loading"
+    }
+
+@app.post("/voice/listen")
+def voice_listen():
+    """Trigger one listen–process–respond cycle"""
+    if not assistant:
+        return {"status": "error", "reason": "Assistant not initialized"}
+        
+    logger.info("API Trigger: Start Listening cycle...")
+    
+    # 1. Capture Audio
+    audio_buffer = assistant.capture.listen_chunk()
+    
+    if audio_buffer is None:
+        return {
+            "heard_text": "",
+            "confidence": 0.0,
+            "intent": "None",
+            "status": "ignored",
+            "reason": "SILENCE"
+        }
+        
+    # 2. Transcribe (Whisper)
+    transcript_data = assistant.asr.transcribe(audio_buffer)
+    text = transcript_data.get("text", "")
+    confidence = transcript_data.get("confidence", 0.0)
+    
+    if not text or len(text) < 2:
+        return {
+            "heard_text": text,
+            "confidence": confidence,
+            "intent": "None",
+            "status": "ignored",
+            "reason": "TOO_SHORT"
+        }
+        
+    logger.info(f"API Heard: {text} (Conf: {confidence:.2f})")
+    
+    # 3. Intent Parsing (Phi-2 / Rules)
+    intent_packet = assistant.intent_parser.parse(text)
+    intent = intent_packet.get("intent", "UNKNOWN")
+    
+    # 4. Handle conversational / fallback
+    if intent == "CHAT":
+        responses = {
+            "hello": "Hello! I'm ready to assist.",
+            "hi": "Hi there!",
+            "hey": "Hey! How can I help?",
+            "bye": "Goodbye!",
+            "goodbye": "See you later!",
+        }
+        response_text = responses.get(text.strip().lower().rstrip('.!?'), "I'm here to help with surgical commands.")
+        assistant.tts.speak(response_text)
+        return {
+            "heard_text": text,
+            "confidence": confidence,
+            "intent": "CHAT",
+            "status": "success",
+            "response": response_text
+        }
+        
+    if intent == "UNKNOWN":
+        assistant.tts.speak("I didn't understand that.")
+        return {
+            "heard_text": text,
+            "confidence": confidence,
+            "intent": "UNKNOWN",
+            "status": "ignored",
+            "reason": "LOW_CONFIDENCE_OR_UNKNOWN"
+        }
+
+    # 5. Safety validation / State check
+    is_valid, msg = assistant.state_manager.validate_command(intent_packet)
+    
+    if not is_valid:
+        # e.g. "NO_IMAGE_LOADED"
+        assistant.tts.speak(msg)
+        return {
+            "heard_text": text,
+            "confidence": confidence,
+            "intent": intent,
+            "status": "blocked",
+            "reason": msg
+        }
+        
+    # 6. Execution via VisionBridge
+    success, exec_msg = assistant.vision_bridge.execute_action(intent, intent_packet)
+    
+    if success:
+        logger.info(f"EXECUTED: {intent}")
+        assistant.tts.speak(f"Executing {intent.replace('_', ' ').lower()}.")
+        return {
+            "heard_text": text,
+            "confidence": confidence,
+            "intent": intent,
+            "status": "success",
+            "reason": exec_msg
+        }
+    else:
+        logger.error(f"EXECUTION FAILED: {intent} - {exec_msg}")
+        assistant.tts.speak(f"Failed to execute.")
+        return {
+            "heard_text": text,
+            "confidence": confidence,
+            "intent": intent,
+            "status": "failed",
+            "reason": exec_msg
+        }
+
+@app.post("/intent/parse")
+def intent_parse(request: IntentRequest):
+    """Test intent engine without microphone"""
+    if not assistant:
+        return {"status": "error", "reason": "Assistant not initialized"}
+        
+    text = request.text
+    logger.info(f"API Intent Parse Request: {text}")
+    
+    intent_packet = assistant.intent_parser.parse(text)
+    
+    # Map fields to match user requested schema
+    return {
+        "intent": intent_packet.get("intent", "UNKNOWN"),
+        "target": intent_packet.get("target", "GAZE_REGION" if intent_packet.get("intent") != "CHAT" else "USER"),
+        "confidence": intent_packet.get("confidence", 0.91),
+        "source": intent_packet.get("source", "RULE")
+    }
 
 if __name__ == "__main__":
-    assistant = AudioAssistant()
-    assistant.start()
+    # Run the API server
+    logger.info("Starting Zero-Touch Audio API Server...")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
