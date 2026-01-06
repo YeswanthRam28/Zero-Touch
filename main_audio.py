@@ -58,6 +58,49 @@ class AssistantState:
         except Exception as e:
             logger.error(f"Error during initialization: {e}")
 
+
+class AudioAssistant:
+    """Minimal helper wrapper used by examples.
+
+    start(interactive=False) prints helpful CLI hints and (optionally)
+    starts a simple interactive loop for manual testing.
+    """
+    def __init__(self):
+        self.state = AssistantState()
+        self._interactive_thread = None
+
+    def start(self, interactive: bool = False):
+        print("🎙️ Starting voice-controlled image viewer (mock assistant)...")
+        print("Say commands like: 'Open patient file', 'Show CT scan', 'Zoom in', 'Zoom out', 'Reset view', 'Highlight abnormalities'")
+        if not interactive:
+            return
+
+        def _loop():
+            while True:
+                try:
+                    cmd = input("(type command or 'exit'): ").strip()
+                    if cmd == 'exit':
+                        print("Exiting assistant")
+                        break
+
+                    pkt = self.state.intent_parser.parse(cmd) if self.state.intent_parser else {"intent": "UNKNOWN"}
+                    is_valid, msg = self.state.state_manager.validate_command(pkt)
+                    if not is_valid:
+                        print("Blocked:", msg)
+                        continue
+
+                    success, exec_msg = self.state.vision_bridge.execute_action(pkt.get('intent', 'UNKNOWN'), pkt)
+                    print(f"Executed: {pkt.get('intent')} (success={success}) -> {exec_msg}")
+                except EOFError:
+                    break
+                except Exception as e:
+                    print("Error in assistant loop:", e)
+
+        import threading
+        self._interactive_thread = threading.Thread(target=_loop, daemon=True)
+        self._interactive_thread.start()
+
+
 # Global state
 app = FastAPI(title="Zero-Touch Voice API")
 assistant = None

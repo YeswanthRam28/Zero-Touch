@@ -5,6 +5,20 @@
   text-align: center;
 }
 
+/* Additional layout helpers for the surgical landing */
+.main-hero {
+  padding-top: 64px;
+  padding-bottom: 64px;
+}
+
+@media (min-width: 768px) {
+  .main-hero { padding-top: 120px; padding-bottom: 120px; }
+}
+
+.heading-xs {
+  font-size: 1.25rem;
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;

@@ -15,7 +15,17 @@ The audio assistant will then call your functions when voice commands are recogn
 import cv2
 import numpy as np
 from audio_engine.vision_bridge import get_bridge
-from main_audio import AudioAssistant
+
+# Import AudioAssistant if available; otherwise fall back to a light mock so example runs without heavy deps
+try:
+    from main_audio import AudioAssistant
+except Exception:
+    class AudioAssistant:
+        def __init__(self):
+            pass
+        def start(self, interactive: bool = False):
+            print("🎙️ (mock) Starting voice-controlled image viewer — audio stack not installed")
+            print("Say commands like: 'Open patient file', 'Show CT scan', 'Zoom in', 'Zoom out', 'Reset view', 'Highlight abnormalities'")
 
 class SimpleImageViewer:
     """
@@ -102,7 +112,7 @@ class SimpleImageViewer:
         print("🔄 View reset")
         return True
 
-def main():
+def main(interactive: bool = False):
     """
     Example integration main function.
     """
@@ -123,15 +133,34 @@ def main():
         "reset_view": viewer.reset_view,
     })
     
-    # 4. Load a test image (optional)
-    # viewer.load_image("path/to/your/image.jpg")
-    
+    # 4. Auto-load sample images from ./samples (if present)
+    import glob, os
+    samples_dir = os.path.join(os.path.dirname(__file__), "samples")
+    if os.path.isdir(samples_dir):
+        imgs = sorted(glob.glob(os.path.join(samples_dir, "*.jpg")) + glob.glob(os.path.join(samples_dir, "*.png")))
+        if imgs:
+            viewer.image_list = imgs
+            print(f"✅ Loaded {len(imgs)} sample images from {samples_dir}")
+        else:
+            print(f"No images found in {samples_dir} (supported: .jpg, .png)")
+    else:
+        print(f"Tip: Create a folder at {samples_dir} and put .jpg/.png images there to auto-load them.")
+
     # 5. Start the audio assistant
     print("🎙️ Starting voice-controlled image viewer...")
-    print("Say commands like: 'zoom in', 'scroll left', 'reset'")
-    
+    print("Say commands like: 'Open patient file', 'Show CT scan', 'Zoom in', 'Zoom out', 'Reset view', 'Highlight abnormalities'")
+
     assistant = AudioAssistant()
-    assistant.start()
+    assistant.start(interactive=interactive)
+
+    if interactive:
+        print("Interactive assistant started. Type commands or 'exit' to quit")
+    else:
+        print("Example viewer started (assistant in non-interactive mode). To try interactive mode run: `python example_vision_integration.py --interactive`")
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description='Example Vision Integration')
+    parser.add_argument('--interactive', action='store_true', help='Start assistant in interactive REPL mode')
+    args = parser.parse_args()
+    main(interactive=args.interactive)
