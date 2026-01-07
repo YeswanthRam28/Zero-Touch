@@ -56,7 +56,7 @@ const App = () => {
             {/* AI Fusion & Why sections inline */}
             <section className="py-16 px-6">
               <div className="max-w-6xl mx-auto">
-                <motion.h3 initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }} className="text-2xl font-bold mb-4">AI Fusion Engine</motion.h3>
+                <motion.h2 initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }} className="text-2xl font-bold mb-4">AI Fusion Engine</motion.h2>
                 <p className="text-gray-300 max-w-3xl mb-6">Voice, gaze, and gesture are fused in a context-aware engine to produce safe, explainable decisions in OR workflows. The engine aligns timestamps, weights confidences, and follows deterministic rules validated by clinical workflows.</p>
 
                 <motion.div className="glass p-4 rounded-lg text-sm text-gray-300">Reliability: Research-driven • OR-ready • Sterility-compliant</motion.div>

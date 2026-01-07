@@ -1,9 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import LivePreview from './LivePreview';
 import { fetchFusion, mockFusion } from '../services/fusionClient';
+import { Upload, ChevronLeft, ChevronRight, Image as ImageIcon, HelpCircle, ArrowLeft } from 'lucide-react';
 
 const Dashboard = ({ onBack }) => {
   const [fusion, setFusion] = useState(null);
+
+  // Helper to handle both string filenames and object metadata
+  const getName = (img) => (typeof img === 'string' ? img : img.filename || img.name || 'unknown');
 
   useEffect(() => {
     let mounted = true;
@@ -23,6 +27,7 @@ const Dashboard = ({ onBack }) => {
   const [images, setImages] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [showControls, setShowControls] = useState(true);
 
   const uploadFile = async (file) => {
     const fd = new FormData();
@@ -32,7 +37,6 @@ const Dashboard = ({ onBack }) => {
       if (!res.ok) throw new Error('Upload failed');
       const j = await res.json();
       setImages((s) => [j.saved, ...s]);
-      // auto-load uploaded image into viewer
       setSelectedImage(j.saved);
     } catch (e) {
       console.error(e);
@@ -41,7 +45,6 @@ const Dashboard = ({ onBack }) => {
   };
 
   useEffect(() => {
-    // Optionally load existing samples on mount
     const loadSamples = async () => {
       try {
         const res = await fetch('/samples');
@@ -57,217 +60,170 @@ const Dashboard = ({ onBack }) => {
     loadSamples();
   }, []);
 
-  // Modal / fullscreen viewer state + accessibility helpers
-  const [showModal, setShowModal] = useState(false);
-  const [modalIndex, setModalIndex] = useState(0);
-  const lastFocused = useRef(null);
-  const closeButtonRef = useRef(null);
-
-  const openModalAt = (index) => {
-    lastFocused.current = document.activeElement;
-    setModalIndex(index);
-    setShowModal(true);
-    setTimeout(() => closeButtonRef.current?.focus(), 0);
-  };
-
-  const closeModal = () => {
-    setShowModal(false);
-    setTimeout(() => lastFocused.current?.focus(), 0);
-  };
-
+  // Navigation handlers
   const showPrev = () => {
     if (!images.length) return;
-    const i = (modalIndex - 1 + images.length) % images.length;
-    setModalIndex(i);
+    const idx = images.indexOf(selectedImage);
+    const i = (idx - 1 + images.length) % images.length;
     setSelectedImage(images[i]);
   };
+
   const showNext = () => {
     if (!images.length) return;
-    const i = (modalIndex + 1) % images.length;
-    setModalIndex(i);
+    const idx = images.indexOf(selectedImage);
+    const i = (idx + 1) % images.length;
     setSelectedImage(images[i]);
   };
 
+  // Keyboard shortcuts
   useEffect(() => {
-    if (!showModal) return;
-
-    // Lock body scroll while modal is open
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    // Focus trap: keep tab inside modal
     const onKey = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closeModal();
-        return;
-      }
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        showPrev();
-        return;
-      }
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        showNext();
-        return;
-      }
-
-      if (e.key === 'Tab') {
-        const modal = document.querySelector('[role="dialog"]');
-        if (!modal) return;
-        const focusable = Array.from(modal.querySelectorAll('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])')).filter(Boolean);
-        if (focusable.length === 0) return;
-        const idx = focusable.indexOf(document.activeElement);
-        if (e.shiftKey && idx === 0) {
-          e.preventDefault();
-          focusable[focusable.length - 1].focus();
-        } else if (!e.shiftKey && idx === focusable.length - 1) {
-          e.preventDefault();
-          focusable[0].focus();
-        }
-      }
+      if (e.key === 'ArrowLeft') showPrev();
+      if (e.key === 'ArrowRight') showNext();
+      if (e.key === 'h') setShowControls(prev => !prev);
     };
-
     window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [showModal, modalIndex, images]);
-
-  // Global F-key shortcut to open fullscreen viewer when images exist
-  useEffect(() => {
-    const onGlobalKey = (e) => {
-      if (e.key === 'f' || e.key === 'F') {
-        // ignore when typing in inputs
-        const tag = document.activeElement?.tagName?.toLowerCase();
-        if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return;
-        if (!showModal && images.length > 0) {
-          const idx = images.indexOf(selectedImage || images[0]);
-          openModalAt(idx < 0 ? 0 : idx);
-        }
-      }
-    };
-    window.addEventListener('keydown', onGlobalKey);
-    return () => window.removeEventListener('keydown', onGlobalKey);
-  }, [images, selectedImage, showModal]);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [images, selectedImage]);
 
   return (
-    <div className="h-screen p-6 overflow-hidden" aria-hidden={showModal}>
-      <div className="max-w-6xl mx-auto h-full">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <button onClick={onBack} className="btn-secondary">← Back</button>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => setShowHelp(true)} className="btn-secondary">Help</button>
-            <button onClick={() => window.location.hash = '/samples'} className="btn-secondary">Samples</button>
-            <button onClick={() => window.location.hash = '/viewer'} className="btn-secondary">Viewer</button>
-          </div>
-        </div>
+    <div className="relative h-screen w-full bg-black overflow-hidden flex flex-col">
 
-        <h1 className="text-3xl font-bold mb-4">Surgical Interface (Mock)</h1>
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-full items-stretch">
-          <div className="glass p-4 rounded-lg lg:col-span-3 h-full flex flex-col">
-            <div className="flex-1 bg-black/20 rounded-md flex items-center justify-center relative overflow-hidden">
-              {selectedImage ? (
-                <button type="button" onClick={() => openModalAt(images.indexOf(selectedImage))} className="w-full h-full p-2 flex items-center justify-center focus:outline-none">
-                  <img src={`/samples/${selectedImage}`} alt={`Selected: ${selectedImage}`} className="max-h-full max-w-full object-contain rounded" />
-                </button>
-              ) : (
-                <div className="text-gray-300">Medical image / viewer placeholder</div>
-              )}
-
-              {images.length > 0 && (
-                <div className="absolute top-3 right-3 flex gap-2">
-                  <button type="button" onClick={() => openModalAt(images.indexOf(selectedImage || images[0]))} className="btn-primary">Open fullscreen</button>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-4 text-sm text-gray-300" aria-live="polite">Fusion action: <strong className="text-primary" aria-atomic="true">{fusion?.action ?? '—'}</strong></div>
-
-            <div className="mt-6">
-              <div className="text-sm text-gray-300 mb-2">Upload images</div>
-              <input type="file" accept="image/png,image/jpeg" onChange={(e) => { if (e.target.files && e.target.files[0]) uploadFile(e.target.files[0]); }} />
-
-              {images.length > 0 && (
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  {images.map((img, idx) => (
-                    <button key={img} type="button" onClick={() => { setSelectedImage(img); setModalIndex(idx); }} aria-label={`Open ${img}`} aria-pressed={selectedImage === img} className={`bg-black/10 p-1 rounded cursor-pointer focus:outline-none ${selectedImage === img ? 'ring-2 ring-primary' : ''}`}>
-                      <img src={`/samples/${img}`} alt={img} className="w-full h-24 object-cover rounded" />
-                      <div className="text-xs text-gray-400 mt-1 truncate">{img}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="glass p-4 rounded-lg h-full flex flex-col">
-            <div className="text-sm text-gray-300 mb-2">Live Inputs</div>
-            <div className="flex-1 overflow-hidden">
-              <LivePreview />
-            </div>
-          </div>
-        </div>
-
-        {/* Fullscreen modal viewer */}
-        {showModal && (
-          <div role="dialog" aria-modal="true" aria-label="Image viewer" className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 transition-opacity duration-200 ease-out">
-            <div className="relative max-w-[95vw] max-h-[95vh] w-full transform transition-transform duration-200 ease-out scale-100">
-              <button ref={closeButtonRef} type="button" onClick={closeModal} className="absolute top-2 right-2 btn-secondary">Close</button>
-              <button type="button" onClick={showPrev} aria-label="Previous" className="absolute left-2 top-1/2 transform -translate-y-1/2 btn-secondary">◀</button>
-              <button type="button" onClick={showNext} aria-label="Next" className="absolute right-2 top-1/2 transform -translate-y-1/2 btn-secondary">▶</button>
-              <div className="bg-black/20 rounded overflow-hidden flex items-center justify-center h-[80vh] p-4">
-                <img src={`/samples/${images[modalIndex]}`} alt={images[modalIndex]} className="max-h-full max-w-full object-contain transition-transform duration-300 ease-out" />
-              </div>
-            </div>
+      {/* 1. Main Content: The Image (Fullscreen) */}
+      <div className="absolute inset-0 flex items-center justify-center z-0 bg-[#050505]">
+        {selectedImage ? (
+          <img
+            src={`/samples/${getName(selectedImage)}`}
+            alt={getName(selectedImage)}
+            className="w-full h-full object-contain"
+          />
+        ) : (
+          <div className="text-gray-500 flex flex-col items-center">
+            <ImageIcon className="w-16 h-16 mb-4 opacity-50" />
+            <p>No image loaded</p>
+            <p className="text-sm">Upload or select a sample</p>
           </div>
         )}
       </div>
 
+      {/* 2. Top Right: Fusion Decision Box (Small) */}
+      <div className="absolute top-4 right-4 z-20">
+        <div className="glass border border-white/10 rounded-lg p-3 w-64 shadow-2xl backdrop-blur-xl bg-black/40 transition-all duration-300 hover:bg-black/60">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] uppercase tracking-widest text-primary/80 font-bold">Fusion Engine</span>
+            <div className={`w-2 h-2 rounded-full ${fusion?.status === 'APPROVED' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-yellow-500'}`} />
+          </div>
+
+          <div className="text-xl font-bold text-white tracking-wide truncate">
+            {fusion?.action?.replace(/_/g, ' ') || 'IDLE'}
+          </div>
+
+          <div className="flex justify-between items-end mt-1">
+            <p className="text-xs text-gray-400 truncate max-w-[70%]">{fusion?.reason || 'Waiting for input...'}</p>
+            <span className="text-xs font-mono text-cyan-400">{(fusion?.score * 100)?.toFixed(0) || 0}%</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Top Left: Navigation & Branding */}
+      <div className="absolute top-4 left-4 z-20 flex items-center gap-3">
+        <button onClick={onBack} className="btn-icon glass hover:bg-white/10 text-white p-2 rounded-full transition-colors flex items-center gap-2 pr-4">
+          <ArrowLeft size={20} />
+          <span className="text-sm font-medium">Exit</span>
+        </button>
+        <div className="h-6 w-px bg-white/20 mx-1"></div>
+        <button onClick={() => setShowHelp(true)} className="btn-icon text-white/70 hover:text-white transition-colors">
+          <HelpCircle size={24} />
+        </button>
+      </div>
+
+      {/* 4. Bottom Right: Live Preview (Picture-in-Picture) */}
+      <div className="absolute bottom-4 right-4 z-20 w-48 rounded-lg overflow-hidden border border-white/10 shadow-lg bg-black/80">
+        <div className="bg-black/50 px-2 py-1 text-[10px] text-gray-400 uppercase tracking-wider flex justify-between items-center">
+          <span>Sensors</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+        </div>
+        <div className="h-32 relative">
+          <LivePreview />
+        </div>
+      </div>
+
+      {/* 5. Bottom Center: Image Gallery Dock */}
+      <div className={`absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 transition-all duration-300 ${showControls ? 'translate-y-0 opacity-100' : 'translate-y-24 opacity-0'}`}>
+        <div className="glass px-4 py-3 rounded-2xl flex items-center gap-4 border border-white/10 bg-black/40 backdrop-blur-md shadow-2xl">
+          <button onClick={showPrev} className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors">
+            <ChevronLeft size={20} />
+          </button>
+
+          <div className="flex gap-2 mx-2">
+            <label className="cursor-pointer relative group w-16 h-16 rounded-xl border-2 border-dashed border-white/20 hover:border-primary/50 flex flex-col items-center justify-center transition-all bg-white/5 hover:bg-white/10">
+              <Upload size={18} className="text-gray-400 group-hover:text-primary mb-1" />
+              <span className="text-[9px] text-gray-500 uppercase">Upload</span>
+              <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => { if (e.target.files?.[0]) uploadFile(e.target.files[0]); }} />
+            </label>
+
+            <div className="h-16 w-px bg-white/10 mx-1"></div>
+
+            <div className="flex gap-2 max-w-[400px] overflow-x-auto no-scrollbar scroll-smooth">
+              {images.map((img, idx) => {
+                const name = getName(img);
+                const isActive = selectedImage === img;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedImage(img)}
+                    className={`relative w-16 h-16 rounded-xl overflow-hidden transition-all duration-200 border-2 flex-shrink-0 ${isActive ? 'border-primary scale-105 shadow-[0_0_15px_rgba(82,39,255,0.4)]' : 'border-transparent hover:border-white/30 opacity-70 hover:opacity-100'}`}
+                  >
+                    <img src={`/samples/${name}`} alt={name} className="w-full h-full object-cover" />
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <button onClick={showNext} className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors">
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      </div>
+
+      {/* Help Modal */}
       {showHelp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-[#0b0b0b] p-6 rounded-lg max-w-2xl w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold">Supported Commands & Interactions</h2>
-              <button onClick={() => setShowHelp(false)} className="btn-secondary">Close</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="glass border border-white/10 p-8 rounded-2xl max-w-2xl w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">System Controls</h2>
+              <button onClick={() => setShowHelp(false)} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-medium transition-colors">Close</button>
             </div>
 
-            <div className="text-sm text-gray-300">
-              <h3 className="font-semibold mt-2">Voice (Whisper + Intent)</h3>
-              <ul className="list-disc pl-5 mt-1">
-                <li>Open patient file</li>
-                <li>Open pre-op MRI / Show CT scan</li>
-                <li>Next image / Previous image</li>
-                <li>Zoom in / Zoom out / Reset view</li>
-                <li>Highlight abnormalities / Analyze this region</li>
-                <li>Compare with pre-op scan</li>
-              </ul>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
+              <div>
+                <h3 className="text-primary font-semibold mb-3 flex items-center gap-2">
+                  <span>🎙️</span> Voice Commands
+                </h3>
+                <ul className="space-y-2 text-gray-400">
+                  <li>"Open patient file"</li>
+                  <li>"Zoom in / Zoom out"</li>
+                  <li>"Next image"</li>
+                  <li>"Highlight abnormalities"</li>
+                </ul>
+              </div>
 
-              <h3 className="font-semibold mt-3">Gestures (MediaPipe Hands)</h3>
-              <ul className="list-disc pl-5 mt-1">
-                <li>Pinch-in / Pinch-out → Zoom</li>
-                <li>Swipe left / right → Prev / Next</li>
-                <li>Open palm → Pause / Freeze view</li>
-                <li>Point → Select ROI</li>
-              </ul>
+              <div>
+                <h3 className="text-secondary font-semibold mb-3 flex items-center gap-2">
+                  <span>👋</span> Gestures
+                </h3>
+                <ul className="space-y-2 text-gray-400">
+                  <li>Pinch: Zoom</li>
+                  <li>Swipe: Navigate</li>
+                  <li>Point: Select Region</li>
+                  <li>Palm: Pause</li>
+                </ul>
+              </div>
+            </div>
 
-              <h3 className="font-semibold mt-3">Gaze</h3>
-              <ul className="list-disc pl-5 mt-1">
-                <li>Look at region → Set ROI</li>
-                <li>Hold gaze 1–2s → Confirm selection</li>
-                <li>Shift gaze → Move focus cursor</li>
-              </ul>
-
-              <h3 className="font-semibold mt-3">Multimodal Examples</h3>
-              <ul className="list-disc pl-5 mt-1">
-                <li>"Zoom here" + Look at region → Zoom into region</li>
-                <li>"Highlight this" + Point → Highlight exact ROI</li>
-                <li>"Compare this area" + Region → Side-by-side comparison</li>
-              </ul>
+            <div className="mt-8 pt-6 border-t border-white/10 text-center text-xs text-gray-500">
+              Press 'H' to toggle UI controls • Arrow keys to navigate
             </div>
           </div>
         </div>

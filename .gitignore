@@ -26,6 +26,7 @@ wheels/
 # Virtual Environment
 venv/
 env/
+.env
 
 # IDE
 .vscode/
@@ -33,6 +34,7 @@ env/
 *.swp
 *.swo
 *~
+.gemini/
 
 # OS
 .DS_Store
@@ -44,11 +46,13 @@ Thumbs.db
 *.bin
 *.pt
 *.pth
+models/
 
 # Audio recordings/cache
 *.wav
 *.mp3
 *.ogg
+temp_audio/
 
 # Whisper cache
 .cache/
@@ -56,6 +60,18 @@ Thumbs.db
 # Test outputs
 test_output/
 debug_output/
+samples/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Frontend
+landing/dist/
+landing/node_modules/
+landing/.env
 
 # Logs
 *.log

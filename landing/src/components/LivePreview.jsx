@@ -93,14 +93,14 @@ const LivePreview = () => {
       <div className="h-full grid grid-cols-1 lg:grid-cols-1 gap-4 h-full">
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-between mb-3">
-            <motion.h3
+            <motion.h2
               initial={{ opacity: 0, y: 6 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               className="text-xl font-bold"
             >
               Live Interaction Preview
-            </motion.h3>
+            </motion.h2>
             <div className="flex items-center gap-3">
               <label className="text-sm text-gray-300">Simulation</label>
               <input type="checkbox" checked={sim} onChange={() => setSim((s) => !s)} />
@@ -112,7 +112,7 @@ const LivePreview = () => {
           <div className="glass p-4 rounded-lg flex-1 flex flex-col overflow-hidden">
             <div className="text-sm text-gray-300 mb-3">Sample Voice Commands</div>
             <div className="flex gap-4 h-full">
-              <div className="w-1/2 overflow-auto">
+              <div className="w-2/5 overflow-auto">
                 <ul className="text-sm text-gray-200 list-disc pl-5">
                   <li>Open patient file</li>
                   <li>Show CT scan</li>
