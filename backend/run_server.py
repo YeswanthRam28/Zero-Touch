@@ -1,15 +1,9 @@
+import uvicorn
 import os
-import importlib.util
+import sys
 
-# Load backend/app.py as a module regardless of package import paths
-APP_PATH = os.path.join(os.path.dirname(__file__), "app.py")
-spec = importlib.util.spec_from_file_location("backend_app", APP_PATH)
-app_mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(app_mod)
-
-# app instance is defined as `app` in backend/app.py
-app = getattr(app_mod, "app")
+# Ensure backend directory is in path
+sys.path.insert(0, os.path.dirname(__file__))
 
 if __name__ == "__main__":
-    # Run without the reloader so the process stays in this terminal
-    app.run(debug=False, use_reloader=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=False)

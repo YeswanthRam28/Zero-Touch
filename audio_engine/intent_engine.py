@@ -63,19 +63,33 @@ class IntentEngine:
             (r"previous image", "PREV_IMAGE"),
             (r"reset", "RESET_VIEW"),
             (r"stop", "STOP"),
+            # New surgical commands
+            (r"highlight", "HIGHLIGHT"),
+            (r"open patient file", "OPEN_PATIENT_FILE"),
+            (r"show (ct|mri|x-ray)", "SHOW_SCAN"),
+            (r"analyze", "ANALYZE_REGION"),
+            (r"compare", "COMPARE_SCANS"),
             # Conversational
             (r"^(hello|hi|hey|greetings)[\.\?!]*$", "CHAT"),
             (r"^(bye|goodbye|see you)[\.\?!]*$", "CHAT"),
             (r"^(how are you|what'?s up|how'?s it going)[\.\?!]*$", "CHAT"),
         ]
 
+        spatial_keywords = ["here", "this", "that", "there", "this region"]
+        target = "SCREEN"
+        for kw in spatial_keywords:
+            if kw in text:
+                target = "GAZE_REGION"
+                break
+
         for pattern, intent in rules:
             if re.search(pattern, text):
                 return {
                     "intent": intent,
-                    "target": "SCREEN" if intent not in ["CHAT"] else "USER",
-                    "confidence": 1.0,  # Rules are deterministic
-                    "source": "RULE"
+                    "target": target if intent not in ["CHAT"] else "USER",
+                    "confidence": 1.0,
+                    "source": "RULE",
+                    "raw_text": text
                 }
         return None
 
@@ -87,10 +101,12 @@ class IntentEngine:
 - ZOOM_IN, ZOOM_OUT: for zoom/enlarge/magnify commands
 - SCROLL_LEFT, SCROLL_RIGHT, SCROLL_UP, SCROLL_DOWN: for navigation
 - NEXT_IMAGE, PREV_IMAGE: for switching images
+- HIGHLIGHT, ANALYZE_REGION: for specific areas (often uses "this" or "here")
+- OPEN_PATIENT_FILE, SHOW_SCAN: for data management
 - CHAT: for greetings, questions, or non-surgical conversation
 - UNKNOWN: if unclear
 
-Return ONLY valid JSON: {{"intent": "INTENT_NAME", "parameter": "value"}}
+Return ONLY valid JSON: {{"intent": "INTENT_NAME", "target": "SCREEN" or "GAZE_REGION", "parameter": "value"}}
 
 Command: "{text}"
 JSON:"""
@@ -105,14 +121,14 @@ JSON:"""
             response_text = output['choices'][0]['text'].strip() + "}"
             
             # Simple JSON cleanup
-            # Try to frame it
             start = response_text.find('{')
             end = response_text.rfind('}') + 1
             if start != -1 and end != -1:
                 json_str = response_text[start:end]
                 data = json.loads(json_str)
-                data["confidence"] = 0.85 # Mock confidence for LLM
+                data["confidence"] = 0.85 
                 data["source"] = "LLM"
+                data["raw_text"] = text
                 return data
             
         except Exception as e:

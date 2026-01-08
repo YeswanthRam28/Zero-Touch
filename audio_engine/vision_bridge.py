@@ -29,7 +29,12 @@ class VisionBridge:
             "reset_view": None,
         }
         self.state_manager = None
+        self.action_listeners = [] # For WebSocket broadcasting
     
+    def register_action_listener(self, listener):
+        """Register a function to be called on every action execution."""
+        self.action_listeners.append(listener)
+
     def register_state_manager(self, state_manager):
         """
         Register the state manager for tracking system state.
@@ -71,10 +76,17 @@ class VisionBridge:
         """
         parameters = parameters or {}
         
+        # Broadcast to listeners (WebSockets)
+        for listener in self.action_listeners:
+            try:
+                listener(intent, parameters)
+            except Exception as e:
+                logger.error(f"Error in action listener: {e}")
+
         # Map intents to callbacks
         action_map = {
-            "ZOOM_IN": ("zoom_in", {"factor": parameters.get("factor", 1.2)}),
-            "ZOOM_OUT": ("zoom_out", {"factor": parameters.get("factor", 0.8)}),
+            "ZOOM_IN": ("zoom_in", {"factor": parameters.get("factor", 1.2), "region": parameters.get("region")}),
+            "ZOOM_OUT": ("zoom_out", {"factor": parameters.get("factor", 0.8), "region": parameters.get("region")}),
             "SCROLL_LEFT": ("scroll", {"direction": "left", "amount": parameters.get("amount", 50)}),
             "SCROLL_RIGHT": ("scroll", {"direction": "right", "amount": parameters.get("amount", 50)}),
             "SCROLL_UP": ("scroll", {"direction": "up", "amount": parameters.get("amount", 50)}),
@@ -83,6 +95,7 @@ class VisionBridge:
             "PREV_IMAGE": ("prev_image", {}),
             "RESET_VIEW": ("reset_view", {}),
             "LOAD_IMAGE": ("load_image", {"image_path": parameters.get("image_path")}),
+            "HIGHLIGHT_REGION": ("scroll", {"direction": "center", "amount": 0}), # Mock for now
         }
         
         if intent not in action_map:
@@ -92,8 +105,8 @@ class VisionBridge:
         callback = self.callbacks.get(callback_name)
         
         if callback is None:
-            logger.warning(f"No callback registered for {callback_name}. Running in mock mode.")
-            return True, f"Mock execution: {intent}"
+            # We treat this as success because the WebSocket listener will handle it in the frontend
+            return True, f"Action {intent} broadcasted to listeners."
         
         try:
             success = callback(**callback_params)

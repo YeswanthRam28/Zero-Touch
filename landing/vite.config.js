@@ -7,18 +7,16 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Forward calls to /fusion to the backend during development
-      '/fusion': {
+      '/vision': {
         target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
       },
-      // Optional: websocket streaming endpoint
-      '/fusion-stream': {
-        target: 'ws://127.0.0.1:5000',
-        ws: true,
+      '/voice': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true,
+        secure: false,
       },
-      // Uploads and samples served by backend
       '/upload': {
         target: 'http://127.0.0.1:5000',
         changeOrigin: true,
@@ -28,6 +26,13 @@ export default defineConfig({
         target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
+      },
+      // Audio API (main_audio.py)
+      '/audio-api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/audio-api/, ''),
       },
     },
   },

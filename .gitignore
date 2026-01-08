@@ -47,6 +47,7 @@ Thumbs.db
 *.pt
 *.pth
 models/
+samples/
 
 # Audio recordings/cache
 *.wav

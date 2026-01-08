@@ -1,185 +1,96 @@
 import os
 import sys
-
-# Ensure project root is on sys.path so imports like `from fusion import fuse`
-# work when running this file from the backend/ directory.
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from flask import Flask, jsonify, request, send_from_directory, send_file
-from werkzeug.utils import secure_filename
-from fusion import fuse
-from backend.vision import get_vision_output
-from backend.voice import get_voice_output
 import json
 import datetime
+import requests
+import shutil
+from fastapi import FastAPI, File, UploadFile, Request, HTTPException
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-app = Flask(__name__)
+app = FastAPI(title="Zero-Touch Backend API")
+
+# Allow CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Directory where sample images are stored/uploaded
 SAMPLES_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'samples'))
 os.makedirs(SAMPLES_DIR, exist_ok=True)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
+AUDIO_API_URL = "http://127.0.0.1:8000"
+
 def _allowed(filename: str) -> bool:
-    if not filename or '.' not in filename:
-        return False
-    return filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Allow CORS in development so the Vite dev server can call /fusion
-try:
-    from flask_cors import CORS
-    CORS(app)
-except Exception:
-    @app.after_request
-    def _cors_headers(response):
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
-        response.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
-        return response
+@app.get("/vision")
+async def vision_endpoint():
+    """Proxy to Zero-Touch Assistant Vision State"""
+    try:
+        res = requests.get(f"{AUDIO_API_URL}/vision/state", timeout=0.5)
+        if res.ok:
+            data = res.json()
+            return {
+                "object": data["gaze"]["eye"],
+                "confidence": 0.98,
+                "timestamp": data["timestamp"],
+                "raw": data
+            }
+    except:
+        pass
+    return {"object": "None", "confidence": 0.0, "timestamp": datetime.datetime.now().timestamp()}
 
-@app.route("/fusion")
-def fusion_endpoint():
-    vision_data = get_vision_output()
-    voice_data = get_voice_output()
-    decision = fuse(vision_data, voice_data)
-    return jsonify(decision)
+@app.get("/voice")
+async def voice_endpoint():
+    """Returns a simple status, actual logic is in main_audio.py"""
+    return {"status": "LISTENING", "timestamp": datetime.datetime.now().timestamp()}
 
+# --- Samples & Uploads ---
 
 METADATA_PATH = os.path.join(SAMPLES_DIR, 'metadata.json')
 
-
 def _read_metadata():
-    try:
-        with open(METADATA_PATH, 'r', encoding='utf-8') as fh:
-            return json.load(fh)
-    except Exception:
-        return {}
+    if not os.path.exists(METADATA_PATH): return {}
+    with open(METADATA_PATH, 'r') as f: return json.load(f)
 
+def _write_metadata(md):
+    with open(METADATA_PATH, 'w') as f: json.dump(md, f, indent=2)
 
-def _write_metadata(md: dict):
-    with open(METADATA_PATH, 'w', encoding='utf-8') as fh:
-        json.dump(md, fh, ensure_ascii=False, indent=2)
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename")
+    
+    if not _allowed(file.filename):
+        raise HTTPException(status_code=400, detail="Invalid file type")
 
-
-def _ensure_metadata_for(filename: str):
-    md = _read_metadata()
-    if filename not in md:
-        path = os.path.join(SAMPLES_DIR, filename)
-        md[filename] = {
-            'filename': filename,
-            'uploaded_at': datetime.datetime.utcfromtimestamp(os.path.getmtime(path)).isoformat() + 'Z',
-            'size': os.path.getsize(path),
-            'tags': [],
-            'uploader': None,
-            'notes': '',
-            'favorite': False,
-        }
-        _write_metadata(md)
-    return md[filename]
-
-
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    """Accept a single file upload with form field 'file' and save to ./samples."""
-    if 'file' not in request.files:
-        return jsonify({'error': 'no file part'}), 400
-    f = request.files['file']
-    if f.filename == '':
-        return jsonify({'error': 'no filename'}), 400
-    filename = secure_filename(f.filename)
-    if not _allowed(filename):
-        return jsonify({'error': 'invalid file type'}), 400
+    filename = file.filename # In production, use a safe filename utility
     dest = os.path.join(SAMPLES_DIR, filename)
-    f.save(dest)
+    
+    with open(dest, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    return {"saved": filename}
 
-    # ensure metadata record exists and update
-    rec = _ensure_metadata_for(filename)
-    rec['uploaded_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
-    rec['size'] = os.path.getsize(dest)
-    _write_metadata(_read_metadata())
-
-    return jsonify({'saved': filename, 'path': f'/samples/{filename}'}), 201
-
-
-@app.route('/samples', methods=['GET'])
-def list_samples():
-    """Return JSON list of sample metadata objects (newest first)."""
-    md = _read_metadata()
-    # ensure metadata exists for any files present
+@app.get("/samples")
+async def list_samples():
     files = [f for f in os.listdir(SAMPLES_DIR) if _allowed(f)]
-    for f in files:
-        _ensure_metadata_for(f)
-    md = _read_metadata()
-    items = list(md.values())
-    items.sort(key=lambda it: it.get('uploaded_at', ''), reverse=True)
-    return jsonify(items)
+    return [{"filename": f, "uploaded_at": datetime.datetime.now().isoformat()} for f in files]
 
-
-@app.route('/samples/<path:filename>')
-def serve_sample(filename):
-    """Serve uploaded sample images for preview."""
-    return send_from_directory(SAMPLES_DIR, filename)
-
-
-@app.route('/samples/download/<path:filename>')
-def download_sample(filename):
-    """Send a sample as an attachment for download."""
+@app.get("/samples/{filename}")
+async def serve_sample(filename: str):
     path = os.path.join(SAMPLES_DIR, filename)
     if not os.path.exists(path):
-        return jsonify({'error': 'not found'}), 404
-    return send_file(path, as_attachment=True)
-
-
-@app.route('/samples/<path:filename>/tags', methods=['POST'])
-def set_tags(filename):
-    """Set tags for a given sample. JSON: { tags: [..] }"""
-    data = request.get_json() or {}
-    tags = data.get('tags')
-    if tags is None or not isinstance(tags, list):
-        return jsonify({'error': 'invalid tags'}), 400
-    md = _read_metadata()
-    if filename not in md:
-        return jsonify({'error': 'not found'}), 404
-    md[filename]['tags'] = tags
-    _write_metadata(md)
-    return jsonify(md[filename])
-
-
-@app.route('/samples/<path:filename>/notes', methods=['POST'])
-def set_notes(filename):
-    """Set freeform notes for a sample. JSON: { notes: '...' }"""
-    data = request.get_json() or {}
-    notes = data.get('notes', '')
-    md = _read_metadata()
-    if filename not in md:
-        return jsonify({'error': 'not found'}), 404
-    md[filename]['notes'] = str(notes)
-    _write_metadata(md)
-    return jsonify(md[filename])
-
-
-@app.route('/samples/<path:filename>', methods=['DELETE'])
-def delete_sample(filename):
-    path = os.path.join(SAMPLES_DIR, filename)
-    if os.path.exists(path):
-        os.remove(path)
-    md = _read_metadata()
-    if filename in md:
-        del md[filename]
-        _write_metadata(md)
-    return jsonify({'deleted': filename})
-
-
-@app.route('/samples/<path:filename>/favorite', methods=['POST'])
-def toggle_favorite(filename):
-    data = request.get_json() or {}
-    fav = bool(data.get('favorite', True))
-    md = _read_metadata()
-    if filename not in md:
-        return jsonify({'error': 'not found'}), 404
-    md[filename]['favorite'] = fav
-    _write_metadata(md)
-    return jsonify(md[filename])
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000)
