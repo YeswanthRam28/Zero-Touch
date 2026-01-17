@@ -38,56 +38,46 @@ const LivePreview = () => {
   }, []);
 
   return (
-    <section id="demo" className="h-full py-4 px-2">
-      <div className="h-full flex flex-col gap-4">
-        <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between mb-3">
-            <motion.h2
-              initial={{ opacity: 0, y: 6 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="text-xl font-bold"
-            >
-              Live Sensor Feedback
-            </motion.h2>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Active</span>
-            </div>
-          </div>
-
-          <div className="glass p-4 rounded-lg flex-1 flex flex-col overflow-hidden">
-            <div className="text-sm text-gray-300 mb-2">Voice Activity</div>
-            <div className="glass p-4 rounded-lg flex-1 mb-4 flex items-center justify-center overflow-hidden">
-              <Waveform key={voiceData?.timestamp} />
-            </div>
-
-            <div className="text-sm text-gray-300 mb-2">Gaze Tracking</div>
-            <div className="glass p-4 rounded-lg h-28 flex items-center justify-center">
-              <GazeRing size={60} />
-            </div>
+    <div className="h-full flex flex-col gap-6">
+      <div className="space-y-6">
+        {/* Voice Visualization */}
+        <div>
+          <div className="text-[10px] text-gray-500 uppercase tracking-[0.2em] mb-3 px-1">Audio Signature</div>
+          <div className="glass-morphism shadow-inner p-4 rounded-3xl flex items-center justify-center bg-white/[0.02] border border-white/5 h-32 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent pointer-events-none"></div>
+            <Waveform key={voiceData?.timestamp} />
           </div>
         </div>
 
-        <div className="glass p-4 rounded-lg">
-          <div className="text-sm text-gray-300 mb-2 font-medium">Real-time Telemetry</div>
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Vision Detected:</span>
-              <span className="text-primary font-mono">{visionData?.object || 'none'}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Voice Intent:</span>
-              <span className="text-secondary font-mono">{voiceData?.intent || 'listening...'}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Signal Confidence:</span>
-              <span className="text-green-400 font-mono">{(voiceData?.confidence * 100 || 0).toFixed(1)}%</span>
-            </div>
+        {/* Gaze Tracking */}
+        <div>
+          <div className="text-[10px] text-gray-500 uppercase tracking-[0.2em] mb-3 px-1">Ocular Tracking</div>
+          <div className="glass-morphism p-6 rounded-3xl flex items-center justify-center bg-white/[0.02] border border-white/5 h-32 relative">
+            <GazeRing size={48} />
+            <div className="absolute bottom-2 right-4 text-[8px] font-mono text-cyan-500/50">XYZ: 0.12, 0.45, -0.89</div>
           </div>
         </div>
       </div>
-    </section>
+
+      {/* Telemetry Details */}
+      <div className="glass-morphism p-5 rounded-3xl bg-white/[0.02] border border-white/5 mt-auto">
+        <div className="text-[10px] text-white/40 uppercase tracking-[0.2em] mb-4 font-medium border-b border-white/5 pb-2">Telemetry</div>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] text-gray-500 uppercase">Focus</span>
+            <span className="text-[11px] text-cyan-400 font-mono tracking-tight">{visionData?.object || 'SCANNING...'}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] text-gray-500 uppercase">Intent</span>
+            <span className="text-[11px] text-secondary font-mono tracking-tight">{voiceData?.intent || 'LISTENING...'}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] text-gray-500 uppercase">Confidence</span>
+            <span className="text-[11px] text-green-400 font-mono">{(voiceData?.confidence * 100 || 0).toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

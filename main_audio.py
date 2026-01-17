@@ -66,8 +66,8 @@ class AssistantState:
             self.asr = ASREngine(model_size="tiny")
             self.asr_loaded = True
             
-            # 5. Intent Parser (LLM)
-            self.intent_parser = IntentEngine(llm_model_path="D:\\LLM\\models\\phi-2\\phi-2.Q4_K_M.gguf")
+            # 5. Intent Parser (Ollama)
+            self.intent_parser = IntentEngine(model_name="phi2-local")
             self.llm_loaded = True
             
             # 6. Multimodal Fusion

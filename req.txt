@@ -8,8 +8,8 @@ torch==2.1.2
 torchaudio==2.1.2
 numpy>=1.22.0
 
-# -------- LLM Inference (Phi-2 GGUF) --------
-llama-cpp-python==0.2.25
+# -------- LLM Inference (Ollama API) --------
+# Make sure Ollama is installed and running
 
 # -------- Text-to-Speech (TTS) --------
 TTS==0.22.0

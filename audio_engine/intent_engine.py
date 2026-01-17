@@ -2,27 +2,20 @@
 import logging
 import json
 import re
+import requests
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 class IntentEngine:
-    def __init__(self, llm_model_path=None):
+    def __init__(self, model_name="phi"):
         """
-        Initialize Intent Engine.
-        :param llm_model_path: Path to GGUF model for llama-cpp-python.
+        Initialize Intent Engine using Ollama.
+        :param model_name: Name of the model in Ollama (e.g., "phi", "llama3").
         """
-        self.llm = None
-        if llm_model_path:
-            try:
-                from llama_cpp import Llama
-                logger.info(f"Loading LLM from {llm_model_path}...")
-                self.llm = Llama(model_path=llm_model_path, n_ctx=2048, verbose=False)
-                logger.info("LLM loaded.")
-            except Exception as e:
-                logger.error(f"Failed to load LLM: {e}")
-        else:
-            logger.info("No LLM model path provided. Running in Rule-Based only mode.")
+        self.model_name = model_name
+        self.ollama_url = "http://localhost:11434/api/generate"
+        logger.info(f"Ollama Intent Engine initialized with model: {self.model_name}")
 
     def parse(self, text):
         """
@@ -39,13 +32,8 @@ class IntentEngine:
             logger.info(f"Rule match: {rule_intent}")
             return rule_intent
 
-        # 2. LLM Fallback (Slow Path)
-        if self.llm:
-            return self._llm_parse(text)
-        
-        # 3. Fail
-        logger.warning("No intent matched.")
-        return {"intent": "UNKNOWN", "confidence": 0.0}
+        # 2. Ollama Fallback (Slow Path)
+        return self._llm_parse(text)
 
     def _rule_based_parse(self, text):
         """
@@ -70,7 +58,7 @@ class IntentEngine:
             (r"analyze", "ANALYZE_REGION"),
             (r"compare", "COMPARE_SCANS"),
             # Conversational
-            (r"^(hello|hi|hey|greetings)[\.\?!]*$", "CHAT"),
+            (r"^(hello|hi|hey|greetings|hi assistant|hello assistant)[\.\?!]*$", "CHAT"),
             (r"^(bye|goodbye|see you)[\.\?!]*$", "CHAT"),
             (r"^(how are you|what'?s up|how'?s it going)[\.\?!]*$", "CHAT"),
         ]
@@ -95,7 +83,7 @@ class IntentEngine:
 
     def _llm_parse(self, text):
         """
-        Use Phi-2/Llama to parse complex commands.
+        Use Ollama to parse complex commands.
         """
         prompt = f"""You are a surgical assistant. Classify the command into ONE of these intents:
 - ZOOM_IN, ZOOM_OUT: for zoom/enlarge/magnify commands
@@ -112,31 +100,31 @@ Command: "{text}"
 JSON:"""
         
         try:
-            output = self.llm(
-                prompt, 
-                max_tokens=64, 
-                stop=["\n", "}"], 
-                echo=False
-            )
-            response_text = output['choices'][0]['text'].strip() + "}"
+            payload = {
+                "model": self.model_name,
+                "prompt": prompt,
+                "stream": False,
+                "format": "json"
+            }
+            response = requests.post(self.ollama_url, json=payload, timeout=10)
             
-            # Simple JSON cleanup
-            start = response_text.find('{')
-            end = response_text.rfind('}') + 1
-            if start != -1 and end != -1:
-                json_str = response_text[start:end]
-                data = json.loads(json_str)
+            if response.status_code == 200:
+                result = response.json()
+                response_text = result.get("response", "").strip()
+                data = json.loads(response_text)
                 data["confidence"] = 0.85 
-                data["source"] = "LLM"
+                data["source"] = "OLLAMA"
                 data["raw_text"] = text
                 return data
+            else:
+                logger.error(f"Ollama Error: Status {response.status_code}")
             
         except Exception as e:
-            logger.error(f"LLM Parse Error: {e}")
+            logger.error(f"Ollama Parse Error: {e}")
         
         return {"intent": "UNKNOWN", "confidence": 0.0}
 
 if __name__ == "__main__":
-    engine = IntentEngine() # No LLM for testing
+    engine = IntentEngine(model_name="phi")
     print(engine.parse("zoom in please"))
     print(engine.parse("scroll right a bit"))

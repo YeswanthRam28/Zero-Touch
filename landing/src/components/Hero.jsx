@@ -11,7 +11,7 @@ const Hero = ({ onLaunch }) => {
         transition={{ delay: 0.1, duration: 0.7 }}
         className="text-5xl md:text-7xl lg:text-8xl font-bold glow-text mb-6 select-none"
       >
-        Zero-Touch Surgical Navigation
+        Zero-Touch
       </motion.h1>
 
       <motion.p
@@ -51,17 +51,7 @@ const Hero = ({ onLaunch }) => {
         </a>
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.8, duration: 1.0 }}
-        className="mt-12 w-full max-w-4xl"
-      >
-        {/* Optional subtle background visual or tagline */}
-        <div className="glass p-4 text-left text-sm text-gray-300">
-          <strong>Clinical focus:</strong> Sterility compliance • Reduced cognitive load • Faster intraoperative decision-making
-        </div>
-      </motion.div>
+
     </section>
   );
 };
