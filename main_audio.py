@@ -18,6 +18,7 @@ from audio_engine.tts_engine import TTSEngine
 from audio_engine.vision_bridge import get_bridge
 from audio_engine.vision_manager import VisionManager
 from audio_engine.fusion_engine import FusionEngine
+from fastapi.middleware.cors import CORSMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -103,36 +104,44 @@ class AssistantState:
         logger.info(f"Broadcasting action: {intent}")
 
     def _gesture_monitor_loop(self):
-        """Background loop to detect gestures without voice."""
-        last_gesture = "NONE"
-        last_gesture_time = 0
+        """Background loop to detect gestures based on static hand poses (One-shot)."""
+        last_triggered_pose = "NONE"
+        last_action_time = 0
         
         while self.vision_running:
             try:
                 state = self.vision_manager.get_state()
-                curr_gesture = state["hand"]["gesture"]
-                pinch_delta = state["hand"]["pinch_delta"]
+                curr_pose = state["hand"].get("pose", "UNKNOWN")
                 
                 now = time.time()
                 
-                # 1. SWIPE DETECTION (Debounced)
-                if curr_gesture != "NONE" and curr_gesture != last_gesture:
-                    if now - last_gesture_time > 1.0: # 1 second debounce
-                        intent = "NEXT_IMAGE" if curr_gesture == "SWIPE_RIGHT" else "PREV_IMAGE"
-                        logger.info(f"Gesture Triggered: {intent}")
-                        self.vision_bridge.execute_action(intent)
-                        last_gesture_time = now
-                
-                # 2. PINCH DETECTION (Continuous for zoom)
-                if abs(pinch_delta) > 10:
-                    intent = "ZOOM_IN" if pinch_delta > 0 else "ZOOM_OUT"
-                    # Zoom factor based on delta
-                    factor = 1.0 + (abs(pinch_delta) / 100.0)
-                    if intent == "ZOOM_OUT": factor = 1.0 / factor
+                # Check for pose change to trigger action
+                if curr_pose != last_triggered_pose:
+                    intent = None
+                    params = {}
                     
-                    self.vision_bridge.execute_action(intent, {"factor": factor})
+                    if curr_pose == "OPEN_PALM":
+                        intent = "ZOOM_OUT"
+                        params = {"factor": 1.4}
+                    elif curr_pose == "L_SHAPE":
+                        intent = "ZOOM_IN"
+                        params = {"factor": 1.4}
+                    elif curr_pose == "PINKY_POINTING":
+                        intent = "NEXT_IMAGE"
+                    elif curr_pose == "THUMB_POINTING":
+                        intent = "PREV_IMAGE"
+                    
+                    # Only execute if it's a valid intent and we haven't triggered a different action too recently
+                    if intent and (now - last_action_time > 1.0):
+                        logger.info(f"Pose Triggered: {intent} from {curr_pose}")
+                        self.vision_bridge.execute_action(intent, params)
+                        last_action_time = now
+                        last_triggered_pose = curr_pose
                 
-                last_gesture = curr_gesture
+                # Reset trigger tracker if hand is closed or unknown
+                if curr_pose in ["FIST", "UNKNOWN", "NONE"]:
+                    last_triggered_pose = curr_pose
+
                 time.sleep(0.1)
             except Exception as e:
                 logger.error(f"Error in gesture monitor: {e}")
@@ -225,6 +234,14 @@ assistant: Optional[AssistantState] = None
 
 app = FastAPI(title="Zero-Touch Voice & Fusion API")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.on_event("startup")
 async def startup_event():
     global assistant
@@ -271,15 +288,13 @@ async def broadcast_to_ws(payload: dict):
 
 # Hack to bridge the threaded bridge to async WebSocket
 def threaded_broadcast(intent, parameters):
-    if not assistant: return
+    if not assistant or not assistant.main_loop: return
     payload = {"type": "ACTION", "intent": intent, "parameters": parameters}
-    # Use a global event loop to schedule the broadcast
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.run_coroutine_threadsafe(broadcast_to_ws(payload), loop)
-    except Exception:
-        pass
+        asyncio.run_coroutine_threadsafe(broadcast_to_ws(payload), assistant.main_loop)
+        logger.info(f"WebSocket Broadcast: {intent}")
+    except Exception as e:
+        logger.error(f"Threaded broadcast failed: {e}")
 
 # --- Models ---
 class IntentRequest(BaseModel):

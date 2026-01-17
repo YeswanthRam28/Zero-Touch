@@ -69,6 +69,9 @@ class VisionManager:
         # Internal tracking
         self._prev_pinch_dist = 0
         self._prev_hand_x = 0
+        self._hand_x_history = []
+        self._hand_history_size = 5
+        self._last_swipe_time = 0
 
     def start(self):
         if self.running: return
@@ -175,46 +178,82 @@ class VisionManager:
     def _process_hand(self, hand, w, h, hand_state):
         landmarks = hand.landmark
         
-        # Pose Detection (Simplified from hand1_test.py)
-        # Thumb, Index, Middle, Ring, Pinky
-        tips = [4, 8, 12, 16, 20]
-        pips = [3, 6, 10, 14, 18]
-        p0 = landmarks[0]
+        # 1. Determine which fingers are extended
+        p0 = landmarks[0] # Wrist
+        p17 = landmarks[17] # Pinky Base
+        finger_stats = []
         
-        fingers = []
-        for i in range(5):
-            d_tip = np.hypot(landmarks[tips[i]].x - p0.x, landmarks[tips[i]].y - p0.y)
-            d_pip = np.hypot(landmarks[pips[i]].x - p0.x, landmarks[pips[i]].y - p0.y)
-            fingers.append(d_tip > d_pip)
+        # --- Thumb (landmark 4) ---
+        d_thumb_tip = np.hypot(landmarks[4].x - p17.x, landmarks[4].y - p17.y)
+        d_thumb_base = np.hypot(landmarks[2].x - p17.x, landmarks[2].y - p17.y)
+        thumb_extended = d_thumb_tip > d_thumb_base * 1.2
+        
+        # --- Other Fingers (8, 12, 16, 20) ---
+        tips = [8, 12, 16, 20]
+        pips = [6, 10, 14, 18]
+        for t, p in zip(tips, pips):
+            d_tip = np.hypot(landmarks[t].x - p0.x, landmarks[t].y - p0.y)
+            d_pip = np.hypot(landmarks[p].x - p0.x, landmarks[p].y - p0.y)
+            finger_stats.append(d_tip > d_pip * 1.15)
             
-        all_open = all(fingers)
-        all_closed = not any(fingers)
-        l_shape = fingers[0] and fingers[1] and not any(fingers[2:])
+        index, middle, ring, pinky = finger_stats
         
+        # 2. Pose Hierarchy
         pose = "UNKNOWN"
-        if all_open: pose = "OPEN_PALM"
-        elif all_closed: pose = "FIST"
-        elif l_shape: pose = "L_SHAPE"
+        if thumb_extended and all(finger_stats):
+            pose = "OPEN_PALM"
+        elif not thumb_extended and not any(finger_stats):
+            pose = "FIST"
+        elif thumb_extended and index and not any([middle, ring, pinky]):
+            pose = "L_SHAPE"
+        elif index and not thumb_extended and not any([middle, ring, pinky]):
+            pose = "INDEX_POINTING"
+        elif thumb_extended and not any(finger_stats):
+            pose = "THUMB_POINTING"
+        elif pinky and not any([thumb_extended, index, middle, ring]):
+            pose = "PINKY_POINTING"
+            
         hand_state["pose"] = pose
 
         # Gestures
         idx_tip = landmarks[8]
+        thumb_tip = landmarks[4]
         hand_state["cursor"] = [int(idx_tip.x * w), int(idx_tip.y * h)]
         
-        # Swipe Velocity
-        vx = (idx_tip.x * w) - self._prev_hand_x
-        self._prev_hand_x = idx_tip.x * w
-        
-        if abs(vx) > 30:
-            hand_state["gesture"] = "SWIPE_RIGHT" if vx > 0 else "SWIPE_LEFT"
-        else:
-            hand_state["gesture"] = "NONE"
+        # --- Robust Swipe Detection ---
+        current_x = idx_tip.x * w
+        self._hand_x_history.append(current_x)
+        if len(self._hand_x_history) > self._hand_history_size:
+            self._hand_x_history.pop(0)
 
-        # Pinch
-        p4 = landmarks[4]
-        pinch_dist = np.hypot(p4.x - idx_tip.x, p4.y - idx_tip.y) * w
+        # Only check for swipe if we have enough history and we are in L_SHAPE or OPEN_PALM
+        gesture = "NONE"
+        if len(self._hand_x_history) == self._hand_history_size and pose in ["L_SHAPE", "OPEN_PALM"]:
+            # Check for a consistent movement trend
+            delta = self._hand_x_history[-1] - self._hand_x_history[0]
+            velocity = delta / self._hand_history_size
+            
+            if abs(velocity) > 15: # Lower threshold because it's averaged
+                now = time.time()
+                if now - self._last_swipe_time > 1.2: # Internal debounce
+                    gesture = "SWIPE_RIGHT" if velocity > 0 else "SWIPE_LEFT"
+                    self._last_swipe_time = now
+                    # Clear history to prevent multiple triggers from one motion
+                    self._hand_x_history = []
+        
+        hand_state["gesture"] = gesture
+
+        # Pinch Based Zoom
+        pinch_dist = np.hypot(thumb_tip.x - idx_tip.x, thumb_tip.y - idx_tip.y) * w
+        hand_state["pinch_dist"] = pinch_dist
+        
+        # Only allow pinch if Index and Thumb are open, and others are closed (or it's just a general pinch pose)
         if self._prev_pinch_dist > 0:
-            hand_state["pinch_delta"] = pinch_dist - self._prev_pinch_dist
+            delta = pinch_dist - self._prev_pinch_dist
+            if abs(delta) > 5: # Minimal change to register
+                hand_state["pinch_delta"] = delta
+            else:
+                hand_state["pinch_delta"] = 0.0
         self._prev_pinch_dist = pinch_dist
 
 if __name__ == "__main__":

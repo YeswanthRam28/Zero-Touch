@@ -374,9 +374,10 @@ const Dashboard = ({ onBack }) => {
                     <span className="w-8 h-px bg-cyan-400"></span> Gestures
                   </h3>
                   <ul className="space-y-4 text-gray-400 font-light">
-                    <li className="flex justify-between"><span>Pinch Fingers</span> <span className="text-[10px] text-cyan-500/50">Dynamic Zoom</span></li>
-                    <li className="flex justify-between"><span>Air Swipe</span> <span className="text-[10px] text-cyan-500/50">File Flip</span></li>
-                    <li className="flex justify-between"><span>Hold Palm</span> <span className="text-[10px] text-cyan-500/50">Freeze View</span></li>
+                    <li className="flex justify-between"><span>Pinky Point</span> <span className="text-[10px] text-cyan-500/50">Next Image</span></li>
+                    <li className="flex justify-between"><span>Thumb Point</span> <span className="text-[10px] text-cyan-500/50">Prev Image</span></li>
+                    <li className="flex justify-between"><span>L-Shape Pose</span> <span className="text-[10px] text-cyan-500/50">Zoom In</span></li>
+                    <li className="flex justify-between"><span>Open Palm</span> <span className="text-[10px] text-cyan-500/50">Zoom Out</span></li>
                   </ul>
                 </div>
               </div>
