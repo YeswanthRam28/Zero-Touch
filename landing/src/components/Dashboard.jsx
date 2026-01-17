@@ -30,26 +30,22 @@ const Dashboard = ({ onBack }) => {
   // Navigation handlers
   const showPrev = useCallback(() => {
     if (!images.length) return;
-    setImages(prevImages => {
-      const idx = prevImages.findIndex(img => getName(img) === getName(selectedImage));
-      const i = (idx - 1 + prevImages.length) % prevImages.length;
-      setSelectedImage(prevImages[i]);
-      setTransform({ scale: 1, x: 0, y: 0 }); // Reset zoom on nav
-      displayMessage(`PREVIOUS IMAGE: ${getName(prevImages[idx])}`, 'action');
-      return prevImages;
-    });
+    const idx = images.findIndex(img => getName(img) === getName(selectedImage));
+    const i = (idx - 1 + images.length) % images.length;
+    const nextImg = images[i];
+    setSelectedImage(nextImg);
+    setTransform({ scale: 1, x: 0, y: 0 });
+    displayMessage(`PREVIOUS IMAGE: ${getName(nextImg)}`, 'action');
   }, [images, selectedImage, displayMessage]);
 
   const showNext = useCallback(() => {
     if (!images.length) return;
-    setImages(prevImages => {
-      const idx = prevImages.findIndex(img => getName(img) === getName(selectedImage));
-      const i = (idx + 1) % prevImages.length;
-      setSelectedImage(prevImages[i]);
-      setTransform({ scale: 1, x: 0, y: 0 }); // Reset zoom on nav
-      displayMessage(`NEXT IMAGE: ${getName(prevImages[idx])}`, 'action');
-      return prevImages;
-    });
+    const idx = images.findIndex(img => getName(img) === getName(selectedImage));
+    const i = (idx + 1) % images.length;
+    const nextImg = images[i];
+    setSelectedImage(nextImg);
+    setTransform({ scale: 1, x: 0, y: 0 });
+    displayMessage(`NEXT IMAGE: ${getName(nextImg)}`, 'action');
   }, [images, selectedImage, displayMessage]);
 
   const handleAction = useCallback((action) => {
@@ -160,7 +156,7 @@ const Dashboard = ({ onBack }) => {
     };
   }, []);
 
-  // Initial Load
+  // Initial Load - Fetch only once on mount
   useEffect(() => {
     const loadSamples = async () => {
       try {
@@ -168,7 +164,10 @@ const Dashboard = ({ onBack }) => {
         if (res.ok) {
           const lst = await res.json();
           setImages(lst);
-          if (lst.length > 0) setSelectedImage(lst[0]);
+          // Set selection if nothing is currently selected
+          if (lst.length > 0) {
+            setSelectedImage(prev => prev || lst[0]);
+          }
         }
       } catch (e) { }
     };
