@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import LivePreview from './LivePreview';
-import { Upload, ChevronLeft, ChevronRight, Image as ImageIcon, HelpCircle, ArrowLeft, Maximize2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Upload, ChevronLeft, ChevronRight, Image as ImageIcon, HelpCircle, ArrowLeft, Maximize2, RotateCcw, ZoomIn, ZoomOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 const Dashboard = ({ onBack }) => {
   const [visionData, setVisionData] = useState(null);
@@ -9,6 +9,7 @@ const Dashboard = ({ onBack }) => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Transform State for Image Viewer
   const [transform, setTransform] = useState({ scale: 1, x: 0, y: 0 });
@@ -192,32 +193,45 @@ const Dashboard = ({ onBack }) => {
     <div className="relative h-screen w-full bg-[#050505] overflow-hidden flex flex-row font-sans text-gray-200">
 
       {/* 4. Left Sidebar: Live Sensor Feedback */}
-      <aside className="w-[350px] h-full border-r border-white/10 bg-black/60 backdrop-blur-3xl z-30 flex flex-col p-6 overflow-y-auto no-scrollbar">
-        <div className="mb-6 flex flex-col">
-          <h1 className="text-xl font-light tracking-[0.3em] uppercase text-white">System Feedback</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
-            <span className="text-[10px] text-cyan-400/70 tracking-[0.2em] uppercase font-medium">Real-time Stream</span>
-          </div>
-        </div>
-
-        <div className="flex-1 -mx-2">
-          <LivePreview />
-        </div>
-
-        <div className="mt-6 pt-6 border-t border-white/5 space-y-4">
-          <div className="glass-morphism rounded-xl p-3 border border-white/5 bg-white/[0.02]">
-            <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Protocol Confidence</div>
-            <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-              <div className="h-full bg-cyan-500 w-[94%] animate-pulse"></div>
+      <aside className={`h-full border-r border-white/10 bg-black/60 backdrop-blur-3xl z-30 flex flex-col overflow-y-auto no-scrollbar transition-all duration-500 ease-in-out relative ${isSidebarCollapsed ? 'w-0 border-r-0 p-0 overflow-hidden' : 'w-[350px] p-6'}`}>
+        <div className={`flex flex-col h-full transition-opacity duration-300 ${isSidebarCollapsed ? 'opacity-0 invisible' : 'opacity-100 visible'}`}>
+          <div className="mb-6 flex flex-col">
+            <h1 className="text-xl font-light tracking-[0.3em] uppercase text-white">System Feedback</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
+              <span className="text-[10px] text-cyan-400/70 tracking-[0.2em] uppercase font-medium">Real-time Stream</span>
             </div>
-            <div className="flex justify-between mt-1 text-[10px] font-mono text-cyan-400">
-              <span>94.2%</span>
-              <span>SYNCHRONIZED</span>
+          </div>
+
+          <div className="flex-1 -mx-2">
+            <LivePreview />
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-white/5 space-y-4">
+            <div className="glass-morphism rounded-xl p-3 border border-white/5 bg-white/[0.02]">
+              <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Protocol Confidence</div>
+              <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full bg-cyan-500 w-[94%] animate-pulse"></div>
+              </div>
+              <div className="flex justify-between mt-1 text-[10px] font-mono text-cyan-400">
+                <span>94.2%</span>
+                <span>SYNCHRONIZED</span>
+              </div>
             </div>
           </div>
         </div>
       </aside>
+
+      {/* Sidebar Toggle Button */}
+      <button
+        onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        className={`absolute top-1/2 -translate-y-1/2 z-40 p-2 rounded-r-xl border border-l-0 border-white/10 bg-black/40 backdrop-blur-3xl text-white/50 hover:text-cyan-400 transition-all duration-500 shadow-2xl hover:bg-black/60 group`}
+        style={{ left: isSidebarCollapsed ? '0' : '350px' }}
+      >
+        <div className="flex flex-col items-center gap-1">
+          {isSidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        </div>
+      </button>
 
       {/* Main Viewport Area */}
       <div className="flex-1 relative h-full">
