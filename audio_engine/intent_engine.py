@@ -3,6 +3,12 @@ import logging
 import json
 import re
 import requests
+import os
+from dotenv import load_dotenv
+import google.generativeai as genai
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -10,11 +16,22 @@ logger = logging.getLogger(__name__)
 class IntentEngine:
     def __init__(self, model_name="phi"):
         """
-        Initialize Intent Engine using Ollama.
-        :param model_name: Name of the model in Ollama (e.g., "phi", "llama3").
+        Initialize Intent Engine with Ollama and Gemini fallback.
+        :param model_name: Name of the model in Ollama.
         """
         self.model_name = model_name
         self.ollama_url = "http://localhost:11434/api/generate"
+        
+        # Configure Gemini
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if self.gemini_api_key:
+            genai.configure(api_key=self.gemini_api_key)
+            self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+            logger.info("Gemini fallback configured.")
+        else:
+            self.gemini_model = None
+            logger.warning("GEMINI_API_KEY not found in .env. Fallback disabled.")
+            
         logger.info(f"Ollama Intent Engine initialized with model: {self.model_name}")
 
     def parse(self, text):
@@ -32,7 +49,7 @@ class IntentEngine:
             logger.info(f"Rule match: {rule_intent}")
             return rule_intent
 
-        # 2. Ollama Fallback (Slow Path)
+        # 2. Ollama Fallback (Slow Path) -> then Gemini
         return self._llm_parse(text)
 
     def _rule_based_parse(self, text):
@@ -83,7 +100,7 @@ class IntentEngine:
 
     def _llm_parse(self, text):
         """
-        Use Ollama to parse complex commands.
+        Use Ollama to parse complex commands with Gemini fallback.
         """
         prompt = f"""You are a surgical assistant. Classify the command into ONE of these intents:
 - ZOOM_IN, ZOOM_OUT: for zoom/enlarge/magnify commands
@@ -99,6 +116,7 @@ Return ONLY valid JSON: {{"intent": "INTENT_NAME", "target": "SCREEN" or "GAZE_R
 Command: "{text}"
 JSON:"""
         
+        # Try Ollama Primary
         try:
             payload = {
                 "model": self.model_name,
@@ -106,7 +124,7 @@ JSON:"""
                 "stream": False,
                 "format": "json"
             }
-            response = requests.post(self.ollama_url, json=payload, timeout=10)
+            response = requests.post(self.ollama_url, json=payload, timeout=10) # Shorter timeout for faster failover
             
             if response.status_code == 200:
                 result = response.json()
@@ -118,13 +136,37 @@ JSON:"""
                 return data
             else:
                 logger.error(f"Ollama Error: Status {response.status_code}")
-            
         except Exception as e:
-            logger.error(f"Ollama Parse Error: {e}")
+            logger.warning(f"Ollama unavailable or timed out: {e}")
+
+        # Fallback to Gemini
+        if self.gemini_model:
+            try:
+                logger.info(f"Attempting Gemini fallback for: {text}")
+                response = self.gemini_model.generate_content(
+                    prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        candidate_count=1,
+                        stop_sequences=[],
+                        max_output_tokens=100,
+                        temperature=0.1,
+                    )
+                )
+                
+                # Cleanup potential markdown code blocks in response
+                response_text = response.text.replace('```json', '').replace('```', '').strip()
+                data = json.loads(response_text)
+                data["confidence"] = 0.90
+                data["source"] = "GEMINI"
+                data["raw_text"] = text
+                logger.info(f"Gemini success: {data['intent']}")
+                return data
+            except Exception as e:
+                logger.error(f"Gemini Fallback Error: {e}")
         
         return {"intent": "UNKNOWN", "confidence": 0.0}
 
 if __name__ == "__main__":
-    engine = IntentEngine(model_name="phi")
+    engine = IntentEngine(model_name="phi2-local")
     print(engine.parse("zoom in please"))
     print(engine.parse("scroll right a bit"))

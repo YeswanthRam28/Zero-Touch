@@ -32,23 +32,31 @@ logger = logging.getLogger("ZeroTouchAssistant")
 
 class AssistantState:
     def __init__(self):
+        # Flags
         self.asr_loaded = False
         self.llm_loaded = False
         self.tts_loaded = False
         self.vision_running = False
-        self.main_loop = None  # Store the main event loop for thread-safe broadcasts
-        
-        # WebSockets
+        self.main_loop = None 
         self.active_connections: List[WebSocket] = []
-        
+
+        # Initialize attributes to None to avoid AttributeErrors if init fails
+        self.vision_manager = None
+        self.tts = None
+        self.capture = None
+        self.asr = None
+        self.intent_parser = None
+        self.fusion_engine = None
+        self.voice_listening = False
+        self.gesture_thread = None
+        self.voice_thread = None
+
         # Modules
         self.state_manager = StateManager()
         self.vision_bridge = get_bridge()
         self.vision_bridge.register_state_manager(self.state_manager)
-        
-        # Register a listener to broadcast actions to frontend
         self.vision_bridge.register_action_listener(self.broadcast_action)
-        
+
         # Core Engines
         try:
             # 1. Vision & Gaze Tracking
@@ -318,15 +326,15 @@ def get_health():
 @app.get("/vision/state")
 def get_vision_state():
     """Returns the current raw sensor state (gaze, hands, etc)"""
-    if not assistant or not assistant.vision_running:
+    if not assistant or not assistant.vision_running or not assistant.vision_manager:
         raise HTTPException(status_code=503, detail="Vision manager not running")
     return assistant.vision_manager.get_state()
 
 @app.post("/voice/listen")
 async def voice_listen():
     """Trigger one listen–fuse–act cycle"""
-    if not assistant:
-        return {"status": "error", "reason": "Assistant not initialized"}
+    if not assistant or not assistant.intent_parser:
+        return {"status": "error", "reason": "Assistant or Intent Parser not initialized"}
         
     logger.info("API Trigger: Start Listening cycle...")
     
@@ -393,7 +401,8 @@ async def voice_listen():
 @app.post("/intent/parse")
 async def intent_parse(request: IntentRequest):
     """Test fusion logic without audio"""
-    if not assistant: return {"status": "error"}
+    if not assistant or not assistant.intent_parser: 
+        return {"status": "error", "reason": "Intent parser not available"}
     
     voice_intent = assistant.intent_parser.parse(request.text)
     vision_state = assistant.vision_manager.get_state()
