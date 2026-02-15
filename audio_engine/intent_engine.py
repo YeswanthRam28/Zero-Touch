@@ -24,10 +24,15 @@ class IntentEngine:
         
         # Configure Gemini
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        if self.gemini_api_key:
+        self.use_gemini = os.getenv("USE_GEMINI_FALLBACK", "false").lower() == "true"
+        
+        if self.gemini_api_key and self.use_gemini:
             genai.configure(api_key=self.gemini_api_key)
             self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
             logger.info("Gemini fallback configured.")
+        elif not self.use_gemini:
+            self.gemini_model = None
+            logger.info("Gemini fallback is disabled via .env (USE_GEMINI_FALLBACK=false).")
         else:
             self.gemini_model = None
             logger.warning("GEMINI_API_KEY not found in .env. Fallback disabled.")

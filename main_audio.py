@@ -65,7 +65,7 @@ class AssistantState:
             self.vision_running = True
             
             # 2. TTS
-            self.tts = TTSEngine(use_coqui=True)
+            self.tts = TTSEngine(use_coqui=False)
             self.tts_loaded = True
             
             # 3. Audio Capture
