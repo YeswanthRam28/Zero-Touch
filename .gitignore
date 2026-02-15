@@ -48,6 +48,7 @@ Thumbs.db
 *.pth
 models/
 samples/
+implementation_plan.md
 
 # Audio recordings/cache
 *.wav
