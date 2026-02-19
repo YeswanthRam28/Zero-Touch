@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import LivePreview from './LivePreview';
-import { Upload, ChevronLeft, ChevronRight, Image as ImageIcon, HelpCircle, ArrowLeft, Maximize2, RotateCcw, ZoomIn, ZoomOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Upload, ChevronLeft, ChevronRight, Image as ImageIcon, HelpCircle, ArrowLeft, Maximize2, RotateCcw, ZoomIn, ZoomOut, PanelLeftClose, PanelLeftOpen, Settings, Mic, Speaker, Camera } from 'lucide-react';
 
 const Dashboard = ({ onBack }) => {
   const [visionData, setVisionData] = useState(null);
@@ -10,6 +10,9 @@ const Dashboard = ({ onBack }) => {
   const [showHelp, setShowHelp] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [devices, setDevices] = useState({ microphones: [], speakers: [], cameras: [] });
+  const [activeDevices, setActiveDevices] = useState({ microphone: null, speaker: null, camera: null });
 
   // Transform State for Image Viewer
   const [transform, setTransform] = useState({ scale: 1, x: 0, y: 0 });
@@ -189,6 +192,34 @@ const Dashboard = ({ onBack }) => {
     }
   };
 
+  const fetchDevices = async () => {
+    try {
+      const res = await fetch('/hardware/devices');
+      if (res.ok) {
+        const data = await res.json();
+        setDevices(data);
+      }
+    } catch (e) { console.error("Failed to fetch devices", e); }
+  };
+
+  const selectDevice = async (type, id) => {
+    try {
+      const res = await fetch('/hardware/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, id })
+      });
+      if (res.ok) {
+        setActiveDevices(prev => ({ ...prev, [type]: id }));
+        displayMessage(`${type.toUpperCase()} SWITCHED`, 'info');
+      }
+    } catch (e) { displayMessage(`SWITCH FAILED`, 'error'); }
+  };
+
+  useEffect(() => {
+    if (showSettings) fetchDevices();
+  }, [showSettings]);
+
   return (
     <div className="relative h-screen w-full bg-[#050505] overflow-hidden flex flex-row font-sans text-gray-200">
 
@@ -299,6 +330,9 @@ const Dashboard = ({ onBack }) => {
           <button onClick={() => setShowHelp(true)} className="p-2 glass-morphism rounded-full border border-white/10 hover:text-cyan-400 transition-all">
             <HelpCircle size={22} />
           </button>
+          <button onClick={() => setShowSettings(true)} className="p-2 glass-morphism rounded-full border border-white/10 hover:text-cyan-400 transition-all">
+            <Settings size={22} />
+          </button>
         </div>
         {/* 5. Bottom Center: Minimal Dock */}
         <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-4 transition-all duration-500 ${showControls ? 'translate-y-0 opacity-100' : 'translate-y-32 opacity-0'}`}>
@@ -398,6 +432,81 @@ const Dashboard = ({ onBack }) => {
 
               <div className="mt-12 pt-8 border-t border-white/5 text-center text-[10px] text-gray-600 tracking-[0.4em] uppercase">
                 Operational Interface v2.0.4 • Touchless Protocol v4
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Settings Modal */}
+        {showSettings && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-xl p-4">
+            <div className="glass-morphism border border-white/10 p-10 rounded-[2rem] max-w-2xl w-full shadow-[0_0_100px_rgba(34,211,238,0.1)] overflow-y-auto max-h-[90vh]">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-3xl font-light tracking-[0.3em] uppercase text-white">Hardware Settings</h2>
+                <button onClick={() => setShowSettings(false)} className="px-6 py-2 rounded-full border border-white/10 hover:bg-white/5 text-sm transition-all focus:outline-none">Dismiss</button>
+              </div>
+
+              <div className="space-y-10">
+                {/* Microphones */}
+                <section>
+                  <h3 className="text-cyan-400 font-bold uppercase tracking-widest flex items-center gap-3 mb-4">
+                    <Mic size={18} /> Microphones
+                  </h3>
+                  <div className="grid grid-cols-1 gap-2">
+                    {devices.microphones.map(dev => (
+                      <button
+                        key={dev.id}
+                        onClick={() => selectDevice('microphone', dev.id)}
+                        className={`flex justify-between items-center p-4 rounded-xl border transition-all ${activeDevices.microphone === dev.id ? 'border-cyan-500 bg-cyan-500/10' : 'border-white/5 hover:bg-white/5'}`}
+                      >
+                        <span className="text-sm font-light">{dev.name}</span>
+                        {activeDevices.microphone === dev.id && <span className="text-[10px] text-cyan-400 font-mono">ACTIVE</span>}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Speakers */}
+                <section>
+                  <h3 className="text-cyan-400 font-bold uppercase tracking-widest flex items-center gap-3 mb-4">
+                    <Speaker size={18} /> Speakers
+                  </h3>
+                  <div className="grid grid-cols-1 gap-2">
+                    {devices.speakers.map(dev => (
+                      <button
+                        key={dev.id}
+                        onClick={() => selectDevice('speaker', dev.id)}
+                        className={`flex justify-between items-center p-4 rounded-xl border transition-all ${activeDevices.speaker === dev.id ? 'border-cyan-500 bg-cyan-500/10' : 'border-white/5 hover:bg-white/5'}`}
+                      >
+                        <span className="text-sm font-light">{dev.name}</span>
+                        {activeDevices.speaker === dev.id && <span className="text-[10px] text-cyan-400 font-mono">ACTIVE</span>}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Cameras */}
+                <section>
+                  <h3 className="text-cyan-400 font-bold uppercase tracking-widest flex items-center gap-3 mb-4">
+                    <Camera size={18} /> Cameras
+                  </h3>
+                  <div className="grid grid-cols-1 gap-2">
+                    {devices.cameras.map(dev => (
+                      <button
+                        key={dev.id}
+                        onClick={() => selectDevice('camera', dev.id)}
+                        className={`flex justify-between items-center p-4 rounded-xl border transition-all ${activeDevices.camera === dev.id ? 'border-cyan-500 bg-cyan-500/10' : 'border-white/5 hover:bg-white/5'}`}
+                      >
+                        <span className="text-sm font-light">{dev.name}</span>
+                        {activeDevices.camera === dev.id && <span className="text-[10px] text-cyan-400 font-mono">ACTIVE</span>}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </div>
+
+              <div className="mt-12 pt-8 border-t border-white/5 text-center text-[10px] text-gray-600 tracking-[0.4em] uppercase">
+                Hardware Configuration Module • Protocol v2.5
               </div>
             </div>
           </div>

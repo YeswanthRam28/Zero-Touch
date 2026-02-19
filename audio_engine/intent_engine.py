@@ -20,7 +20,7 @@ class IntentEngine:
         :param model_name: Name of the model in Ollama.
         """
         self.model_name = model_name
-        self.ollama_url = "http://localhost:11434/api/generate"
+        self.ollama_url = "http://127.0.0.1:11434/api/generate"
         
         # Configure Gemini
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
@@ -83,6 +83,10 @@ class IntentEngine:
             (r"^(hello|hi|hey|greetings|hi assistant|hello assistant)[\.\?!]*$", "CHAT"),
             (r"^(bye|goodbye|see you)[\.\?!]*$", "CHAT"),
             (r"^(how are you|what'?s up|how'?s it going)[\.\?!]*$", "CHAT"),
+            # Maintenance/System
+            (r"(generate report|end session|finish procedure)", "GENERATE_REPORT"),
+            # Medical Knowledge Fast-Track
+            (r"(dosage|how much|what is|tell me about|contraindication|parasit|paracetamol|medication)", "KNOWLEDGE_QUERY"),
         ]
 
         spatial_keywords = ["here", "this", "that", "there", "this region"]
@@ -95,7 +99,8 @@ class IntentEngine:
         for pattern, intent in rules:
             if re.search(pattern, text):
                 return {
-                    "intent": intent,
+                    "intent": "KNOWLEDGE" if intent == "KNOWLEDGE_QUERY" else intent,
+                    "type": "KNOWLEDGE" if intent == "KNOWLEDGE_QUERY" else ("NAVIGATION" if intent not in ["CHAT"] else "CHAT"),
                     "target": target if intent not in ["CHAT"] else "USER",
                     "confidence": 1.0,
                     "source": "RULE",
@@ -107,18 +112,23 @@ class IntentEngine:
         """
         Use Ollama to parse complex commands with Gemini fallback.
         """
-        prompt = f"""You are a surgical assistant. Classify the command into ONE of these intents:
-- ZOOM_IN, ZOOM_OUT: for zoom/enlarge/magnify commands
-- SCROLL_LEFT, SCROLL_RIGHT, SCROLL_UP, SCROLL_DOWN: for navigation
-- NEXT_IMAGE, PREV_IMAGE: for switching images
-- HIGHLIGHT, ANALYZE_REGION: for specific areas (often uses "this" or "here")
-- OPEN_PATIENT_FILE, SHOW_SCAN: for data management
-- CHAT: for greetings, questions, or non-surgical conversation
-- UNKNOWN: if unclear
+        prompt = f"""You are a surgical assistant. Classify the input into ONE of these types and intents:
+TYPES:
+- NAVIGATION: For physical control of images (Zoom, Scroll, Next, Prev)
+- KNOWLEDGE: For medical questions, patient data, or clinical reasoning
+- CHAT: For greetings and general conversation
 
-Return ONLY valid JSON: {{"intent": "INTENT_NAME", "target": "SCREEN" or "GAZE_REGION", "parameter": "value"}}
+INTENTS:
+- ZOOM_IN, ZOOM_OUT, SCROLL_LEFT, SCROLL_RIGHT, SCROLL_UP, SCROLL_DOWN
+- NEXT_IMAGE, PREV_IMAGE, RESET_VIEW
+- HIGHLIGHT, ANALYZE_REGION
+- OPEN_PATIENT_FILE, SHOW_SCAN
+- CHAT
+- UNKNOWN
 
-Command: "{text}"
+Return ONLY valid JSON: {{"type": "TYPE_NAME", "intent": "INTENT_NAME", "target": "SCREEN" or "GAZE_REGION", "parameter": "value"}}
+
+Input: "{text}"
 JSON:"""
         
         # Try Ollama Primary
@@ -129,7 +139,7 @@ JSON:"""
                 "stream": False,
                 "format": "json"
             }
-            response = requests.post(self.ollama_url, json=payload, timeout=10) # Shorter timeout for faster failover
+            response = requests.post(self.ollama_url, json=payload, timeout=20)
             
             if response.status_code == 200:
                 result = response.json()
@@ -138,6 +148,9 @@ JSON:"""
                 data["confidence"] = 0.85 
                 data["source"] = "OLLAMA"
                 data["raw_text"] = text
+                # Force uppercase and ensure fields exist
+                data["type"] = str(data.get("type", "KNOWLEDGE")).upper()
+                data["intent"] = str(data.get("intent", "UNKNOWN")).upper()
                 return data
             else:
                 logger.error(f"Ollama Error: Status {response.status_code}")
@@ -151,25 +164,80 @@ JSON:"""
                 response = self.gemini_model.generate_content(
                     prompt,
                     generation_config=genai.types.GenerationConfig(
-                        candidate_count=1,
-                        stop_sequences=[],
-                        max_output_tokens=100,
                         temperature=0.1,
                     )
                 )
                 
-                # Cleanup potential markdown code blocks in response
                 response_text = response.text.replace('```json', '').replace('```', '').strip()
                 data = json.loads(response_text)
                 data["confidence"] = 0.90
                 data["source"] = "GEMINI"
                 data["raw_text"] = text
-                logger.info(f"Gemini success: {data['intent']}")
+                data["type"] = str(data.get("type", "KNOWLEDGE")).upper()
+                data["intent"] = str(data.get("intent", "UNKNOWN")).upper()
                 return data
             except Exception as e:
                 logger.error(f"Gemini Fallback Error: {e}")
         
-        return {"intent": "UNKNOWN", "confidence": 0.0}
+        return {"intent": "UNKNOWN", "type": "UNKNOWN", "confidence": 0.0}
+
+    def medical_query(self, query):
+        """
+        Specialized method for clinical reasoning/Q&A.
+        """
+        logger.info(f"Medical Q&A Query: {query}")
+        
+        prompt = f"""You are an expert surgical co-pilot and clinical data engine. 
+The user is a lead surgeon in an active operating room. 
+Provide precise, evidence-based medical data for the following question. 
+Be concise, authoritative, and factual. Skip all generic safety warnings and disclaimers.
+
+Question: "{query}"
+Assistant (Direct Answer):"""
+
+        # Primary: Ollama
+        try:
+            payload = {
+                "model": self.model_name,
+                "prompt": prompt,
+                "stream": False
+            }
+            response = requests.post(self.ollama_url, json=payload, timeout=15)
+            if response.status_code == 200:
+                return response.json().get("response", "").strip()
+        except:
+            pass
+
+        # Fallback: Gemini
+        if self.gemini_model:
+            try:
+                response = self.gemini_model.generate_content(prompt)
+                return response.text.strip()
+            except:
+                pass
+
+        return "I'm sorry, I cannot access the medical database right now. Please verify with hospital protocols."
+
+    def summarize_session(self, logs):
+        """
+        Summarize surgical logs into a procedure note.
+        """
+        log_text = json.dumps(logs, indent=2)
+        prompt = f"""Based on the following surgical assistant event logs, generate a professional, concise "Surgical Procedure Note".
+Summarize the key actions taken and the progression of the procedure.
+
+Logs:
+{log_text}
+
+Surgical Note:"""
+
+        try:
+            payload = {"model": self.model_name, "prompt": prompt, "stream": False}
+            response = requests.post(self.ollama_url, json=payload, timeout=30)
+            if response.status_code == 200:
+                return response.json().get("response", "").strip()
+        except:
+            return "Failed to generate summary automatically."
 
 if __name__ == "__main__":
     engine = IntentEngine(model_name="phi2-local")

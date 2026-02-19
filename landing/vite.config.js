@@ -27,12 +27,22 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      // Audio API (main_audio.py)
+      // Audio Assistant API (main_audio.py on port 8000)
       '/audio-api': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/audio-api/, ''),
+      },
+      '/hardware': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/session': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
       },
     },
   },

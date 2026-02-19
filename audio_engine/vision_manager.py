@@ -26,6 +26,8 @@ class VisionManager:
         self.camera_id = camera_id
         self.running = False
         self.thread = None
+        self.cap = None
+        self.new_camera_id = None
         
         # State
         self.current_state = {
@@ -84,22 +86,40 @@ class VisionManager:
         self.running = False
         if self.thread:
             self.thread.join()
+        if self.cap:
+            self.cap.release()
         logger.info("Vision Manager stopped.")
+
+    def switch_camera(self, new_id):
+        """Signal the background thread to switch cameras."""
+        self.new_camera_id = new_id
+        logger.info(f"Vision Manager: Requesting camera switch to ID {new_id}")
 
     def get_state(self) -> Dict[str, Any]:
         return self.current_state.copy()
 
     def _run_loop(self):
-        cap = cv2.VideoCapture(self.camera_id)
-        if not cap.isOpened():
-            logger.error("Could not open camera.")
-            self.running = False
-            return
-
+        self.cap = cv2.VideoCapture(self.camera_id)
+        
         last_time = time.time()
         
         while self.running:
-            ret, frame = cap.read()
+            # Check for camera switch request
+            if self.new_camera_id is not None:
+                logger.info(f"Switching camera from {self.camera_id} to {self.new_camera_id}")
+                if self.cap: self.cap.release()
+                self.camera_id = self.new_camera_id
+                self.cap = cv2.VideoCapture(self.camera_id)
+                self.new_camera_id = None
+                if not self.cap.isOpened():
+                    logger.error(f"Failed to open camera {self.camera_id}")
+                    continue
+
+            if not self.cap or not self.cap.isOpened():
+                time.sleep(0.5)
+                continue
+
+            ret, frame = self.cap.read()
             if not ret: break
             
             frame = cv2.flip(frame, 1)
@@ -142,7 +162,8 @@ class VisionManager:
             # Small sleep to be CPU friendly, though Mediapipe is the bottleneck
             time.sleep(0.01)
 
-        cap.release()
+        if self.cap:
+            self.cap.release()
 
     def _process_gaze(self, face, w, h, gaze_state):
         # Iris Logic

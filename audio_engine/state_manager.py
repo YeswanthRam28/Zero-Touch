@@ -1,5 +1,5 @@
-
 import logging
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,8 @@ class StateManager:
             "is_image_loaded": False,
             "gaze_available": False,
             "current_mode": "IDLE",  # IDLE, VIEWING, MEASURING, etc.
-            "last_action": None
+            "last_action": None,
+            "event_logs": [] # To store actions for AI Scribe
         }
 
     def update_state(self, key, value):
@@ -25,18 +26,31 @@ class StateManager:
         else:
             logger.warning(f"Attempted to update unknown state key: {key}")
 
+    def log_event(self, event_type, details):
+        """
+        Log an event for the AI Scribe.
+        """
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        entry = {
+            "timestamp": timestamp,
+            "type": event_type,
+            "details": details
+        }
+        self.state["event_logs"].append(entry)
+        logger.info(f"Event logged: {event_type}")
+
+    def get_event_logs(self):
+        """
+        Return the list of logged events.
+        """
+        return self.state["event_logs"]
+
     def get_state(self, key):
-        """
-        Get value of a state variable.
-        """
+        # ... existing ...
         return self.state.get(key)
 
     def validate_command(self, intent_packet):
-        """
-        Validate if the intent can be executed in current state.
-        :param intent_packet: Dict containing 'intent', 'target', etc.
-        :return: (is_valid, message)
-        """
+        # ... existing ...
         intent = intent_packet.get("intent")
         
         # Example validation logic

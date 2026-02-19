@@ -3,6 +3,7 @@ import time
 import sys
 import threading
 import asyncio
+import re
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, Body, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
@@ -18,7 +19,10 @@ from audio_engine.tts_engine import TTSEngine
 from audio_engine.vision_bridge import get_bridge
 from audio_engine.vision_manager import VisionManager
 from audio_engine.fusion_engine import FusionEngine
+from audio_engine.scribe import AIScribe
 from fastapi.middleware.cors import CORSMiddleware
+import sounddevice as sd
+import cv2
 
 # Configure logging
 logging.basicConfig(
@@ -69,7 +73,7 @@ class AssistantState:
             self.tts_loaded = True
             
             # 3. Audio Capture
-            self.capture = AudioCapture(duration=3.0, threshold=0.01)
+            self.capture = AudioCapture(duration=5, threshold=0.005)
             
             # 4. ASR (Whisper)
             self.asr = ASREngine(model_size="tiny")
@@ -85,11 +89,14 @@ class AssistantState:
             # 7. Voice Monitoring Control
             self.voice_listening = True
             
-            # 8. Start Gesture Monitoring Loop
+            # 8. AI Scribe
+            self.scribe = AIScribe()
+            
+            # 9. Start Gesture Monitoring Loop
             self.gesture_thread = threading.Thread(target=self._gesture_monitor_loop, daemon=True)
             self.gesture_thread.start()
             
-            # 9. Start Continuous Voice Monitoring Loop
+            # 10. Start Continuous Voice Monitoring Loop
             self.voice_thread = threading.Thread(target=self._voice_monitor_loop, daemon=True)
             self.voice_thread.start()
             
@@ -143,6 +150,7 @@ class AssistantState:
                     if intent and (now - last_action_time > 1.0):
                         logger.info(f"Pose Triggered: {intent} from {curr_pose}")
                         self.vision_bridge.execute_action(intent, params)
+                        self.state_manager.log_event("GESTURE_ACTION", {"intent": intent, "pose": curr_pose, "params": params})
                         last_action_time = now
                         last_triggered_pose = curr_pose
                 
@@ -171,7 +179,11 @@ class AssistantState:
                 transcript_data = self.asr.transcribe(audio_buffer)
                 text = transcript_data.get("text", "").strip()
                 
-                if len(text) < 2:
+                if len(text) < 2 or re.match(r'^[ \.\,\?\!\-\_\...]+$', text):
+                    continue
+                
+                # Filter noise/hallucinations
+                if text.lower() in ["thank you.", "subtitles by", "thanks for watching"]:
                     continue
                 
                 logger.info(f"[VOICE] Detected: {text}")
@@ -181,44 +193,67 @@ class AssistantState:
                 
                 # 4. Multimodal Fusion
                 vision_state = self.vision_manager.get_state()
-                fused_intent = self.fusion_engine.fuse(voice_intent, vision_state)
                 
-                intent = fused_intent["action"]
+                # Check Type (Blocking Clinical reasoning if Knowledge)
+                intent_type = str(voice_intent.get("type", "NAVIGATION")).upper()
+                if intent_type == "KNOWLEDGE":
+                    # Strictly blocking "Think" phase as per user request for Q&A
+                    logger.info("Knowledge query detected. Processing...")
+                    answer = self.intent_parser.medical_query(text)
+                    self._sync_broadcast({"type": "MESSAGE", "text": answer, "source": "AI"})
+                    self.tts.speak(answer) # USER wanted this blocking for Q&A
+                    self.state_manager.log_event("KNOWLEDGE_QUERY", {"query": text, "answer": answer})
+                    continue
+
+                fused_intent = self.fusion_engine.fuse(voice_intent, vision_state)
+                intent = str(fused_intent["action"]).upper()
                 
                 # 5. Handle CHAT separately
-                if intent == "CHAT":
+                if intent == "CHAT" or intent_type == "CHAT":
                     response_text = "I'm here to assist with surgical commands."
                     if "hello" in text.lower(): 
                         response_text = "Hello! Ready for procedure."
                     
-                    self.tts.speak(response_text)
-                    # Broadcast to frontend
                     self._sync_broadcast({"type": "MESSAGE", "text": response_text, "source": "AI"})
+                    threading.Thread(target=self.tts.speak, args=(response_text,), daemon=True).start()
+                    self.state_manager.log_event("CHAT", {"text": text, "response": response_text})
                     continue
                 
                 # 6. Check if rejected
                 if fused_intent["status"] == "REJECTED":
-                    self.tts.speak(fused_intent["reason"])
                     self._sync_broadcast({"type": "MESSAGE", "text": fused_intent["reason"], "source": "SYSTEM"})
+                    threading.Thread(target=self.tts.speak, args=(fused_intent["reason"],), daemon=True).start()
                     continue
                 
                 # 7. Safety Validation
                 is_valid, msg = self.state_manager.validate_command(fused_intent)
                 if not is_valid:
-                    self.tts.speak(msg)
                     self._sync_broadcast({"type": "MESSAGE", "text": msg, "source": "SYSTEM"})
+                    threading.Thread(target=self.tts.speak, args=(msg,), daemon=True).start()
                     continue
                 
                 # 8. Execute Action
                 success, exec_msg = self.vision_bridge.execute_action(intent, fused_intent.get("parameters"))
                 
+                if intent == "GENERATE_REPORT":
+                    threading.Thread(target=self.tts.speak, args=("Ending session and generating surgical report.",), daemon=True).start()
+                    logs = self.state_manager.get_event_logs()
+                    summary = self.intent_parser.summarize_session(logs)
+                    pdf_path = self.scribe.generate_report(summary, logs)
+                    if pdf_path:
+                        threading.Thread(target=self.tts.speak, args=("Report generated successfully.",), daemon=True).start()
+                        self._sync_broadcast({"type": "MESSAGE", "text": f"Report saved: {pdf_path}", "source": "SYSTEM"})
+                    continue
+
                 if success:
                     logger.info(f"[VOICE] Executed: {intent}")
-                    self.tts.speak(f"Executing {intent.replace('_', ' ').lower()}.")
+                    speak_text = f"Executing {intent.replace('_', ' ').lower()}."
+                    threading.Thread(target=self.tts.speak, args=(speak_text,), daemon=True).start()
                     # Broadcast action to frontend
                     self._sync_broadcast({"type": "ACTION", "intent": intent, "parameters": fused_intent.get("parameters")})
+                    self.state_manager.log_event("VOICE_ACTION", {"intent": intent, "text": text, "params": fused_intent.get("parameters")})
                 else:
-                    self.tts.speak("Failed to execute.")
+                    threading.Thread(target=self.tts.speak, args=("Failed to execute.",), daemon=True).start()
                     logger.warning(f"[VOICE] Failed: {exec_msg}")
                 
             except Exception as e:
@@ -420,6 +455,94 @@ async def intent_parse(request: IntentRequest):
         "vision_snapshot": vision_state,
         "fused_decision": fused
     }
+
+# --- Hardware Management ---
+
+@app.get("/hardware/devices")
+async def list_devices():
+    """List available audio and video devices."""
+    try:
+        # Audio Devices
+        devices = sd.query_devices()
+        input_devices = []
+        output_devices = []
+        
+        for i, d in enumerate(devices):
+            dev_info = {
+                "id": i,
+                "name": d['name'],
+                "channels": d['max_input_channels'] if d['max_input_channels'] > 0 else d['max_output_channels']
+            }
+            if d['max_input_channels'] > 0:
+                input_devices.append(dev_info)
+            if d['max_output_channels'] > 0:
+                output_devices.append(dev_info)
+                
+        # Camera Devices (Scan first 5 indices)
+        cameras = []
+        for i in range(5):
+            cap = cv2.VideoCapture(i)
+            if cap.isOpened():
+                cameras.append({"id": i, "name": f"Camera {i}"})
+                cap.release()
+                
+        return {
+            "microphones": input_devices,
+            "speakers": output_devices,
+            "cameras": cameras
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class DeviceSelection(BaseModel):
+    type: str # 'microphone', 'speaker', 'camera'
+    id: int
+
+@app.post("/hardware/select")
+async def select_device(selection: DeviceSelection):
+    """Switch the active hardware device."""
+    if not assistant:
+        raise HTTPException(status_code=503, detail="Assistant not ready")
+        
+    try:
+        if selection.type == 'microphone':
+            assistant.capture.set_device(selection.id)
+            return {"status": "success", "message": f"Microphone switched to {selection.id}"}
+        elif selection.type == 'speaker':
+            assistant.tts.set_device(selection.id)
+            return {"status": "success", "message": f"Speaker switched to {selection.id}"}
+        elif selection.type == 'camera':
+            assistant.vision_manager.switch_camera(selection.id)
+            return {"status": "success", "message": f"Camera switched to {selection.id}"}
+        else:
+            raise HTTPException(status_code=400, detail="Invalid device type")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/session/end")
+async def end_session():
+    """Summarize session and generate PDF report"""
+    if not assistant:
+        return {"status": "error", "message": "Assistant not initialized"}
+    
+    logs = assistant.state_manager.get_event_logs()
+    if not logs:
+        return {"status": "ignored", "message": "No events recorded"}
+    
+    # 1. Summarize via LLM
+    summary = assistant.intent_parser.summarize_session(logs)
+    
+    # 2. Generate PDF
+    pdf_path = assistant.scribe.generate_report(summary, logs)
+    
+    if pdf_path:
+        return {
+            "status": "success", 
+            "report_path": pdf_path,
+            "summary": summary
+        }
+    else:
+        return {"status": "error", "message": "Failed to generate report"}
 
 if __name__ == "__main__":
     # Register the broadcast hack

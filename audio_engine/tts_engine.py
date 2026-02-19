@@ -4,21 +4,32 @@ import os
 import sounddevice as sd
 import numpy as np
 import threading
+import sys
+
+if sys.platform == "win32":
+    import pythoncom
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 class TTSEngine:
-    def __init__(self, use_coqui=False):
+    def __init__(self, use_coqui=False, device_index=None):
         """
         Initialize TTS Engine.
         :param use_coqui: If True, tries to use Coqui TTS (heavy). 
                           If False, uses pyttsx3 (offline, fast) if available.
+        :param device_index: Index of the output device to use.
         """
         self.engine = None
         self.use_coqui = use_coqui
         self.pyttsx3_engine = None
         self.lock = threading.Lock()
+        self.device_index = device_index
+
+    def set_device(self, index):
+        """Set the active output device."""
+        self.device_index = index
+        logger.info(f"Audio output device set to index: {index}")
         
         if self.use_coqui:
             # ... existing coqui init ...
@@ -52,6 +63,9 @@ class TTSEngine:
         Speak the text using available engine. Thread-safe.
         """
         with self.lock:
+            if sys.platform == "win32":
+                pythoncom.CoInitialize()
+            
             logger.info(f"🗣️ TTS: {text}")
             
             if self.use_coqui and self.engine:
@@ -59,7 +73,7 @@ class TTSEngine:
                     # Coqui TTS
                     wav = self.engine.tts(text=text)
                     wav_np = np.array(wav, dtype=np.float32)
-                    sd.play(wav_np, samplerate=22050)
+                    sd.play(wav_np, samplerate=22050, device=self.device_index)
                     sd.wait()
                     return
                 except Exception as e:
