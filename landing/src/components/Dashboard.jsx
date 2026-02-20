@@ -52,10 +52,36 @@ const Dashboard = ({ onBack }) => {
     displayMessage(`NEXT IMAGE: ${getName(nextImg)}`, 'action');
   }, [images, selectedImage, displayMessage]);
 
+  const captureCurrentFrame = useCallback(async () => {
+    if (!selectedImage) return;
+    
+    try {
+      const name = getName(selectedImage);
+      displayMessage('CAPTURING SCAN FOR ANALYSIS...', 'info');
+      
+      const response = await fetch(`/samples/${name}`);
+      const blob = await response.blob();
+      const reader = new FileReader();
+      
+      reader.onloadend = async () => {
+        const base64data = reader.result.split(',')[1];
+        await fetch('http://localhost:8000/vision/upload_frame', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64data })
+        });
+      };
+      reader.readAsDataURL(blob);
+    } catch (e) {
+      console.error("Capture failed:", e);
+      displayMessage('CAPTURE FAILED', 'error');
+    }
+  }, [selectedImage, displayMessage]);
+
   const handleAction = useCallback((action) => {
     const { intent, parameters } = action;
     console.log("Executing Action:", intent, parameters);
-    displayMessage(`${intent.replace(/_/g, ' ')}`, 'action');
+    if (intent !== 'CAPTURE_IMAGE') displayMessage(`${intent.replace(/_/g, ' ')}`, 'action');
 
     switch (intent) {
       case 'ZOOM_IN':
@@ -89,10 +115,13 @@ const Dashboard = ({ onBack }) => {
       case 'HIGHLIGHT_REGION':
         // Show a temporary highlight at parameters.coordinates
         break;
+      case 'CAPTURE_IMAGE':
+        captureCurrentFrame();
+        break;
       default:
         console.warn("Unhandled Intent:", intent);
     }
-  }, [showNext, showPrev, displayMessage]);
+  }, [showNext, showPrev, displayMessage, captureCurrentFrame]);
 
   // WebSocket Connection
   useEffect(() => {

@@ -27,13 +27,25 @@ class VisionBridge:
             "next_image": None,
             "prev_image": None,
             "reset_view": None,
+            "capture_image": None, # New: Returns base64 or path
         }
         self.state_manager = None
         self.action_listeners = [] # For WebSocket broadcasting
+        self.image_provider = None # Specific for fetching dashboard frames
     
     def register_action_listener(self, listener):
         """Register a function to be called on every action execution."""
         self.action_listeners.append(listener)
+
+    def register_image_provider(self, provider_func):
+        """Register a function that provides the current dashboard image."""
+        self.image_provider = provider_func
+
+    def request_image(self):
+        """Request the current frame from the registered provider."""
+        if self.image_provider:
+            return self.image_provider()
+        return None
 
     def register_state_manager(self, state_manager):
         """
@@ -55,6 +67,7 @@ class VisionBridge:
             "next_image": function() -> bool,
             "prev_image": function() -> bool,
             "reset_view": function() -> bool,
+            "capture_image": function() -> str, # Returns base64
         }
         
         Each callback should return True on success, False on failure.
@@ -95,7 +108,8 @@ class VisionBridge:
             "PREV_IMAGE": ("prev_image", {}),
             "RESET_VIEW": ("reset_view", {}),
             "LOAD_IMAGE": ("load_image", {"image_path": parameters.get("image_path")}),
-            "HIGHLIGHT_REGION": ("scroll", {"direction": "center", "amount": 0}), # Mock for now
+            "HIGHLIGHT_REGION": ("scroll", {"direction": "center", "amount": 0}), 
+            "CAPTURE_IMAGE": ("capture_image", {}),
         }
         
         if intent not in action_map:
@@ -109,6 +123,11 @@ class VisionBridge:
             return True, f"Action {intent} broadcasted to listeners."
         
         try:
+            # Special handling for capture which returns data instead of bool
+            if callback_name == "capture_image":
+                data = callback()
+                return (True, data) if data else (False, "Capture failed")
+
             success = callback(**callback_params)
             if success:
                 return True, f"Executed {intent}"

@@ -39,6 +39,21 @@ class IntentEngine:
             
         logger.info(f"Ollama Intent Engine initialized with model: {self.model_name}")
 
+    def ensure_vision_model(self):
+        """Pre-warm the llava model in Ollama to ensure it's ready."""
+        try:
+            logger.info("Pre-warming Ollama vision model (llava)...")
+            payload = {
+                "model": "llava",
+                "prompt": "hello",
+                "stream": False
+            }
+            # Fast timeout for pre-warm
+            requests.post(self.ollama_url, json=payload, timeout=30)
+            logger.info("Vision model (llava) is ready.")
+        except Exception as e:
+            logger.warning(f"Could not pre-warm llava: {e}")
+
     def parse(self, text):
         """
         Parse text into intent packet.
@@ -79,12 +94,12 @@ class IntentEngine:
             (r"show (ct|mri|x-ray)", "SHOW_SCAN"),
             (r"analyze", "ANALYZE_REGION"),
             (r"compare", "COMPARE_SCANS"),
+            # Maintenance/System
+            (r"(generate (a )?report|end session|finish procedure|create report|make report|save report)", "GENERATE_REPORT"),
             # Conversational
             (r"^(hello|hi|hey|greetings|hi assistant|hello assistant)[\.\?!]*$", "CHAT"),
             (r"^(bye|goodbye|see you)[\.\?!]*$", "CHAT"),
             (r"^(how are you|what'?s up|how'?s it going)[\.\?!]*$", "CHAT"),
-            # Maintenance/System
-            (r"(generate report|end session|finish procedure)", "GENERATE_REPORT"),
             # Medical Knowledge Fast-Track
             (r"(dosage|how much|what is|tell me about|contraindication|parasit|paracetamol|medication)", "KNOWLEDGE_QUERY"),
         ]
@@ -114,15 +129,18 @@ class IntentEngine:
         """
         prompt = f"""You are a surgical assistant. Classify the input into ONE of these types and intents:
 TYPES:
-- NAVIGATION: For physical control of images (Zoom, Scroll, Next, Prev)
-- KNOWLEDGE: For medical questions, patient data, or clinical reasoning
-- CHAT: For greetings and general conversation
+- NAVIGATION: For physical control of images (Zoom, Scroll, Next, Prev) OR system actions like GENERATE_REPORT.
+- KNOWLEDGE: For medical questions, patient data, or clinical reasoning.
+- CHAT: ONLY for greetings, "how are you", or small talk. 
+
+CRITICAL: "Generate report", "end session", or "finish procedure" are NAVIGATION/SYSTEM intents, NEVER CHAT.
 
 INTENTS:
 - ZOOM_IN, ZOOM_OUT, SCROLL_LEFT, SCROLL_RIGHT, SCROLL_UP, SCROLL_DOWN
 - NEXT_IMAGE, PREV_IMAGE, RESET_VIEW
 - HIGHLIGHT, ANALYZE_REGION
 - OPEN_PATIENT_FILE, SHOW_SCAN
+- GENERATE_REPORT
 - CHAT
 - UNKNOWN
 
@@ -217,6 +235,51 @@ Assistant (Direct Answer):"""
                 pass
 
         return "I'm sorry, I cannot access the medical database right now. Please verify with hospital protocols."
+
+    def analyze_image(self, image_data, text_query, gaze_info=None):
+        """
+        Analyze an image (base64) using Ollama (llava) or Gemini.
+        :param image_data: Base64 string of the image.
+        :param text_query: The question/command from the surgeon.
+        :param gaze_info: Description of where the surgeon is looking (e.g. "LEFT", "CENTER", "RIGHT")
+        """
+        logger.info("Starting visual analysis...")
+        
+        location_context = f"The surgeon is currently focused on the {gaze_info} part of the image." if gaze_info else ""
+        
+        prompt = f"""You are a smart surgical assistant. {location_context}
+Analyze this medical image based on the surgeon's request: "{text_query}". 
+Be precise, clinical, and highlight any potential anomalies or structures of interest in the {gaze_info or 'specified'} region.
+Assistant:"""
+
+        # 1. Try Ollama with 'llava' (Hardcoded for vision tasks)
+        try:
+            payload = {
+                "model": "llava",
+                "prompt": prompt,
+                "images": [image_data],
+                "stream": False
+            }
+            logger.info("Sending request to Ollama (llava)...")
+            response = requests.post(self.ollama_url, json=payload, timeout=90)
+            if response.status_code == 200:
+                return response.json().get("response", "").strip()
+        except Exception as e:
+            logger.warning(f"Ollama Vision (llava) failed: {e}")
+
+        # 2. Fallback to Gemini Pro Vision
+        if self.gemini_model:
+            try:
+                logger.info("Falling back to Gemini Vision...")
+                import base64
+                # Simplistic conversion for Gemini API
+                img_bytes = base64.b64decode(image_data)
+                response = self.gemini_model.generate_content([prompt, {"mime_type": "image/jpeg", "data": img_bytes}])
+                return response.text.strip()
+            except Exception as e:
+                logger.error(f"Gemini Vision Fallback Error: {e}")
+
+        return "I am unable to analyze the image at this moment. Please ensure the local vision model is running."
 
     def summarize_session(self, logs):
         """

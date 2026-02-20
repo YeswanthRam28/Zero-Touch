@@ -131,7 +131,9 @@ graph TD
 
 * Sterile, hands-free operation
 * Medical image navigation (zoom, pan, scroll)
-* Region highlighting and annotation
+* **Gaze-Aware Visual Analysis**: Point at a region and ask "Analyze this"
+* **Clinical Q&A**: Voice access to medical databases and scan interpretation
+* **Automated Operative Notes**: Local AI-generated procedure summaries (PDF)
 * Multi-image comparison support
 * Customizable action mappings
 
@@ -252,10 +254,10 @@ python main_audio.py
 
 * **Multimodal Fusion**: First-of-its-kind gesture + gaze + voice integration for surgery
 * **Real-Time Performance**: <200ms latency for surgical-grade responsiveness
-* **Local-First Processing**: No cloud dependency for privacy and reliability
-* **Adaptive Personalization**: Learns individual surgeon gesture patterns
-* **Surgical Workflow Optimized**: Designed specifically for sterile OR environments
-* **Lightweight AI**: Runs on standard hardware without GPU requirements
+* **Gaze-Aware Vision AI**: Uses `llava` for focused medical scan interpretation
+* **Local-First Clinical Q&A**: Offline access to medical knowledge using `phi-2`/`llama3`
+* **Autonomous Surgical Scribe**: Generates professional PDF reports from procedure logs
+* **Zero-Cloud Dependency**: Maximum privacy and reliability in the OR
 
 ---
 

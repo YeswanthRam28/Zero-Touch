@@ -60,6 +60,7 @@ class AssistantState:
         self.vision_bridge = get_bridge()
         self.vision_bridge.register_state_manager(self.state_manager)
         self.vision_bridge.register_action_listener(self.broadcast_action)
+        self.latest_dashboard_frame = None # Storage for incoming dashboard images
 
         # Core Engines
         try:
@@ -82,6 +83,8 @@ class AssistantState:
             # 5. Intent Parser (Ollama)
             self.intent_parser = IntentEngine(model_name="phi2-local")
             self.llm_loaded = True
+            # Pre-warm vision model on startup
+            threading.Thread(target=self.intent_parser.ensure_vision_model, daemon=True).start()
             
             # 6. Multimodal Fusion
             self.fusion_engine = FusionEngine()
@@ -207,7 +210,37 @@ class AssistantState:
 
                 fused_intent = self.fusion_engine.fuse(voice_intent, vision_state)
                 intent = str(fused_intent["action"]).upper()
-                
+
+                # Handle Visual Analysis specifically
+                if intent == "ANALYZE_REGION":
+                    logger.info("Visual analysis request detected...")
+                    threading.Thread(target=self.tts.speak, args=("Analyzing focus region...",), daemon=True).start()
+                    
+                    # 1. Fetch image from dashboard (via bridge)
+                    # Note: This broadcasts "CAPTURE_IMAGE" to the frontend
+                    self.latest_dashboard_frame = None # Reset
+                    self.vision_bridge.execute_action("CAPTURE_IMAGE")
+                    
+                    # Wait for frame with timeout
+                    start_wait = time.time()
+                    while self.latest_dashboard_frame is None and (time.time() - start_wait < 5.0):
+                        time.sleep(0.1)
+
+                    if self.latest_dashboard_frame:
+                        gaze_info = vision_state.get("gaze", {}).get("eye", "CENTER")
+                        analysis = self.intent_parser.analyze_image(self.latest_dashboard_frame, text, gaze_info)
+                        
+                        self._sync_broadcast({"type": "MESSAGE", "text": analysis, "source": "AI"})
+                        self.tts.speak(analysis)
+                        self.state_manager.log_event("VISUAL_ANALYSIS", {"query": text, "gaze": gaze_info, "analysis": analysis})
+                        continue
+                    else:
+                        msg = "Analysis failed: Timed out waiting for dashboard image."
+                        logger.warning(msg)
+                        self._sync_broadcast({"type": "MESSAGE", "text": msg, "source": "SYSTEM"})
+                        self.tts.speak("I couldn't get the image from the dashboard.")
+                        continue
+                        
                 # 5. Handle CHAT separately
                 if intent == "CHAT" or intent_type == "CHAT":
                     response_text = "I'm here to assist with surgical commands."
@@ -344,6 +377,14 @@ class IntentRequest(BaseModel):
     text: str
 
 # --- Endpoints ---
+
+@app.post("/vision/upload_frame")
+async def upload_frame(payload: dict = Body(...)):
+    """Frontend uploads the requested frame here as base64."""
+    if assistant:
+        assistant.latest_dashboard_frame = payload.get("image")
+        logger.info("New dashboard frame received.")
+    return {"status": "success"}
 
 @app.get("/health")
 def get_health():

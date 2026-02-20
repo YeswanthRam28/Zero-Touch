@@ -62,19 +62,17 @@ temp_audio/
 # Test outputs
 test_output/
 debug_output/
-samples/
 
-# Node
+# Node & Frontend
 node_modules/
 npm-debug.log
 yarn-error.log
 package-lock.json
-
-# Frontend
 landing/dist/
 landing/node_modules/
 landing/.env
 
-# Logs
+# Logs & Documentation
 *.log
 operative_notes/
+server.log
