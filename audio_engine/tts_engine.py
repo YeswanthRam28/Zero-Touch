@@ -26,37 +26,46 @@ class TTSEngine:
         self.lock = threading.Lock()
         self.device_index = device_index
 
-    def set_device(self, index):
-        """Set the active output device."""
-        self.device_index = index
-        logger.info(f"Audio output device set to index: {index}")
-        
+        # Initialize engines on startup
         if self.use_coqui:
-            # ... existing coqui init ...
             try:
                 from TTS.api import TTS
                 logger.info("Initializing Coqui TTS...")
                 self.engine = TTS(model_name="tts_models/en/ljspeech/glow-tts", progress_bar=False, gpu=False)
                 logger.info("Coqui TTS initialized.")
             except ImportError:
-                logger.warning("Coqui TTS library not found.")
+                logger.warning("Coqui TTS library not found. Falling back to pyttsx3.")
             except Exception as e:
                 logger.error(f"Error initializing Coqui TTS: {e}")
-        
-        # Always try to initialize pyttsx3 as a fallback or primary if use_coqui is False
+
+        # Always initialize pyttsx3 as fallback (or primary if use_coqui is False)
         if not self.engine:
             try:
                 import pyttsx3
-                logger.info("Initializing pyttsx3...")
+                logger.info("Initializing pyttsx3 TTS...")
                 self.pyttsx3_engine = pyttsx3.init()
-                # Set properties
-                self.pyttsx3_engine.setProperty('rate', 175)    # Speed
-                self.pyttsx3_engine.setProperty('volume', 1.0)  # Volume
-                logger.info("pyttsx3 initialized.")
+                self.pyttsx3_engine.setProperty('rate', 175)
+                self.pyttsx3_engine.setProperty('volume', 1.0)
+                logger.info("pyttsx3 TTS initialized successfully.")
             except ImportError:
-                logger.warning("pyttsx3 library not found. Falling back to simple print.")
+                logger.warning("pyttsx3 not found. TTS will use print fallback.")
             except Exception as e:
                 logger.error(f"Error initializing pyttsx3: {e}")
+
+    def set_device(self, index):
+        """Set the active output device."""
+        self.device_index = index
+        logger.info(f"Audio output device set to index: {index}")
+        # Reinitialize pyttsx3 to apply device settings if needed
+        if not self.use_coqui:
+            try:
+                import pyttsx3
+                self.pyttsx3_engine = pyttsx3.init()
+                self.pyttsx3_engine.setProperty('rate', 175)
+                self.pyttsx3_engine.setProperty('volume', 1.0)
+                logger.info(f"pyttsx3 reinitialized for device {index}.")
+            except Exception as e:
+                logger.error(f"Failed to reinitialize pyttsx3: {e}")
 
     def speak(self, text):
         """
