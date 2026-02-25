@@ -237,6 +237,64 @@ python main_audio.py
 
 ---
 
+## 🎙️ Voice Command Reference
+
+Speak naturally — Zero-Touch understands intent, not just exact words. Spatial words like **"here"**, **"this"**, or **"that"** automatically fuse with your current gaze direction.
+
+### 🖼️ Image Navigation
+
+| What to Say | Action |
+|---|---|
+| `"Zoom in"` / `"Zoom in here"` | Zoom into the full image or gaze region |
+| `"Zoom out"` | Zoom out |
+| `"Scroll left / right / up / down"` | Pan the image in that direction |
+| `"Next image"` | Switch to the next scan |
+| `"Previous image"` | Switch to the previous scan |
+| `"Reset"` / `"Reset view"` | Return to the default zoom and position |
+
+### 🔬 AI-Powered Analysis
+
+| What to Say | Action |
+|---|---|
+| `"Analyze this region"` / `"Analyze this"` | Capture current scan + gaze position → send to **llava** for clinical interpretation |
+| `"Highlight this"` / `"Highlight abnormality"` | Mark a region of interest |
+| `"Compare scans"` | Request a side-by-side comparison |
+| `"Show CT"` / `"Show MRI"` / `"Show X-ray"` | Load a specific scan type |
+| `"Open patient file"` | Load the patient's imaging record |
+
+### 🧠 Clinical Knowledge (Q&A)
+
+| What to Say | Action |
+|---|---|
+| `"What is the dosage of Lidocaine?"` | Real-time medical Q&A via local LLM |
+| `"Tell me about this medication"` | Drug information lookup |
+| `"What are the contraindications for…"` | Clinical data retrieval |
+| `"How much anesthesia…"` | Dosage and protocol queries |
+
+> Any medical question is detected automatically — just speak it naturally.
+
+### 📋 Session Management
+
+| What to Say | Action |
+|---|---|
+| `"Generate report"` / `"Generate a report"` | Summarize the session and export a **PDF Operative Note** |
+| `"End session"` / `"Finish procedure"` | Finalize the session and generate report |
+| `"Create report"` / `"Save report"` | Alternative phrasings for the same action |
+
+### 👋 Hands-Free Gestures
+
+| Gesture | Action |
+|---|---|
+| **Open Palm** | Zoom out |
+| **L-Shape** (thumb + index) | Zoom in |
+| **Index Pointing** | Select / cursor control |
+| **Pinky Pointing** | Next image |
+| **Thumb Pointing** | Previous image |
+
+> **💡 Tip:** Combine voice + gaze for precision. Say *"zoom in here"* while looking at a specific region of the scan to zoom into exactly that area.
+
+---
+
 ## 📸 Project Components
 
 ## 🎯 Use Cases

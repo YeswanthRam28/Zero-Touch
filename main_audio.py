@@ -200,11 +200,13 @@ class AssistantState:
                 # Check Type (Blocking Clinical reasoning if Knowledge)
                 intent_type = str(voice_intent.get("type", "NAVIGATION")).upper()
                 if intent_type == "KNOWLEDGE":
-                    # Strictly blocking "Think" phase as per user request for Q&A
                     logger.info("Knowledge query detected. Processing...")
                     answer = self.intent_parser.medical_query(text)
+                    if not answer or not answer.strip():
+                        answer = "I could not retrieve a response. Please try again."
+                    logger.info(f"[Q&A RESULT] ({len(answer)} chars): {answer[:200]}")
                     self._sync_broadcast({"type": "MESSAGE", "text": answer, "source": "AI"})
-                    self.tts.speak(answer) # USER wanted this blocking for Q&A
+                    threading.Thread(target=self.tts.speak, args=(answer,), daemon=True).start()
                     self.state_manager.log_event("KNOWLEDGE_QUERY", {"query": text, "answer": answer})
                     continue
 
@@ -230,15 +232,20 @@ class AssistantState:
                         gaze_info = vision_state.get("gaze", {}).get("eye", "CENTER")
                         analysis = self.intent_parser.analyze_image(self.latest_dashboard_frame, text, gaze_info)
                         
+                        if not analysis or not analysis.strip():
+                            analysis = "I analyzed the image but could not generate a description. Please try again."
+                        
+                        logger.info(f"[ANALYSIS RESULT] ({len(analysis)} chars): {analysis[:200]}")
                         self._sync_broadcast({"type": "MESSAGE", "text": analysis, "source": "AI"})
-                        self.tts.speak(analysis)
+                        # Run TTS in background so it doesn't block the loop
+                        threading.Thread(target=self.tts.speak, args=(analysis,), daemon=True).start()
                         self.state_manager.log_event("VISUAL_ANALYSIS", {"query": text, "gaze": gaze_info, "analysis": analysis})
                         continue
                     else:
                         msg = "Analysis failed: Timed out waiting for dashboard image."
                         logger.warning(msg)
                         self._sync_broadcast({"type": "MESSAGE", "text": msg, "source": "SYSTEM"})
-                        self.tts.speak("I couldn't get the image from the dashboard.")
+                        threading.Thread(target=self.tts.speak, args=("I couldn't get the image from the dashboard.",), daemon=True).start()
                         continue
                         
                 # 5. Handle CHAT separately
@@ -278,15 +285,31 @@ class AssistantState:
                         self._sync_broadcast({"type": "MESSAGE", "text": f"Report saved: {pdf_path}", "source": "SYSTEM"})
                     continue
 
+                _TTS_RESPONSES = {
+                    "ZOOM_IN":    "Zooming in.",
+                    "ZOOM_OUT":   "Zooming out.",
+                    "SCROLL_LEFT":  "Scrolling left.",
+                    "SCROLL_RIGHT": "Scrolling right.",
+                    "SCROLL_UP":    "Scrolling up.",
+                    "SCROLL_DOWN":  "Scrolling down.",
+                    "NEXT_IMAGE":  "Next image.",
+                    "PREV_IMAGE":  "Previous image.",
+                    "RESET_VIEW": "View reset.",
+                    "STOP":       "Stopping.",
+                    "HIGHLIGHT":  "Highlighting region.",
+                    "COMPARE_SCANS": "Preparing comparison.",
+                    "SHOW_SCAN":  "Loading scan.",
+                    "OPEN_PATIENT_FILE": "Opening patient file.",
+                }
+
                 if success:
                     logger.info(f"[VOICE] Executed: {intent}")
-                    speak_text = f"Executing {intent.replace('_', ' ').lower()}."
+                    speak_text = _TTS_RESPONSES.get(intent, f"Done, {intent.replace('_', ' ').lower()}.")
                     threading.Thread(target=self.tts.speak, args=(speak_text,), daemon=True).start()
-                    # Broadcast action to frontend
                     self._sync_broadcast({"type": "ACTION", "intent": intent, "parameters": fused_intent.get("parameters")})
                     self.state_manager.log_event("VOICE_ACTION", {"intent": intent, "text": text, "params": fused_intent.get("parameters")})
                 else:
-                    threading.Thread(target=self.tts.speak, args=("Failed to execute.",), daemon=True).start()
+                    threading.Thread(target=self.tts.speak, args=("I couldn't complete that action.",), daemon=True).start()
                     logger.warning(f"[VOICE] Failed: {exec_msg}")
                 
             except Exception as e:

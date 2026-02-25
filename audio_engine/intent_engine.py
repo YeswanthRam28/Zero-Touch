@@ -2,6 +2,7 @@
 import logging
 import json
 import re
+import time
 import requests
 import os
 from dotenv import load_dotenv
@@ -213,26 +214,32 @@ Be concise, authoritative, and factual. Skip all generic safety warnings and dis
 Question: "{query}"
 Assistant (Direct Answer):"""
 
-        # Primary: Ollama
+        # Primary: Ollama (high timeout - model may need to swap after llava)
         try:
             payload = {
                 "model": self.model_name,
                 "prompt": prompt,
                 "stream": False
             }
-            response = requests.post(self.ollama_url, json=payload, timeout=15)
+            logger.info(f"Sending medical query to Ollama ({self.model_name})...")
+            response = requests.post(self.ollama_url, json=payload, timeout=90)
             if response.status_code == 200:
-                return response.json().get("response", "").strip()
-        except:
-            pass
+                answer = response.json().get("response", "").strip()
+                logger.info(f"Medical Q&A answered ({len(answer)} chars).")
+                return answer
+            else:
+                logger.warning(f"Ollama medical_query returned status {response.status_code}")
+        except Exception as e:
+            logger.warning(f"Ollama medical_query failed: {e}")
 
         # Fallback: Gemini
         if self.gemini_model:
             try:
+                logger.info("Falling back to Gemini for medical Q&A...")
                 response = self.gemini_model.generate_content(prompt)
                 return response.text.strip()
-            except:
-                pass
+            except Exception as e:
+                logger.error(f"Gemini medical_query fallback failed: {e}")
 
         return "I'm sorry, I cannot access the medical database right now. Please verify with hospital protocols."
 
@@ -252,27 +259,37 @@ Analyze this medical image based on the surgeon's request: "{text_query}".
 Be precise, clinical, and highlight any potential anomalies or structures of interest in the {gaze_info or 'specified'} region.
 Assistant:"""
 
-        # 1. Try Ollama with 'llava' (Hardcoded for vision tasks)
-        try:
-            payload = {
-                "model": "llava",
-                "prompt": prompt,
-                "images": [image_data],
-                "stream": False
-            }
-            logger.info("Sending request to Ollama (llava)...")
-            response = requests.post(self.ollama_url, json=payload, timeout=90)
-            if response.status_code == 200:
-                return response.json().get("response", "").strip()
-        except Exception as e:
-            logger.warning(f"Ollama Vision (llava) failed: {e}")
+        # 1. Try Ollama with 'llava' (Hardcoded for vision tasks), with retry
+        MAX_RETRIES = 2
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                payload = {
+                    "model": "llava",
+                    "prompt": prompt,
+                    "images": [image_data],
+                    "stream": False
+                }
+                logger.info(f"Sending request to Ollama (llava) — attempt {attempt}/{MAX_RETRIES}...")
+                response = requests.post(self.ollama_url, json=payload, timeout=120)
+                if response.status_code == 200:
+                    result = response.json().get("response", "").strip()
+                    logger.info(f"Ollama (llava) responded successfully on attempt {attempt}.")
+                    return result
+                else:
+                    logger.warning(f"Ollama returned status {response.status_code} on attempt {attempt}. Body: {response.text[:200]}")
+                    if attempt < MAX_RETRIES:
+                        logger.info("Retrying in 3 seconds...")
+                        time.sleep(3)
+            except Exception as e:
+                logger.warning(f"Ollama Vision (llava) attempt {attempt} failed: {e}")
+                if attempt < MAX_RETRIES:
+                    time.sleep(3)
 
         # 2. Fallback to Gemini Pro Vision
         if self.gemini_model:
             try:
                 logger.info("Falling back to Gemini Vision...")
                 import base64
-                # Simplistic conversion for Gemini API
                 img_bytes = base64.b64decode(image_data)
                 response = self.gemini_model.generate_content([prompt, {"mime_type": "image/jpeg", "data": img_bytes}])
                 return response.text.strip()
