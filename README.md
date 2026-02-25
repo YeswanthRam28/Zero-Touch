@@ -100,7 +100,7 @@ graph TD
 ### 🎙️ Voice Command Intelligence
 
 * **Whisper Tiny** for local, low-latency ASR
-* Lightweight LLM (TinyLlama/Phi-2) for flexible command parsing
+* Lightweight LLM (Phi-2) for flexible command parsing
 * Error recovery with clarification prompts
 * Memory state tracking (active image, mode, context)
 * Medical terminology support
