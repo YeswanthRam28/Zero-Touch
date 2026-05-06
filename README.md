@@ -1,10 +1,10 @@
 <div align="center">
 
-# 🧠 Zero-Touch – Multimodal Surgeon Assistant
+# Zero-Touch – Multimodal Surgeon Assistant
 
 ![Zero-Touch](https://img.shields.io/badge/Zero--Touch-Surgical%20Intelligence-blueviolet?style=for-the-badge&logo=medical-cross&logoColor=white)
 
-**🏥 Gesture + Gaze + Voice Controlled Surgical Assistant**
+** Gesture + Gaze + Voice Controlled Surgical Assistant**
 
 [![Privacy First](https://img.shields.io/badge/Privacy-Local%20First-green?style=flat-square)](#)
 [![Multimodal](https://img.shields.io/badge/Multimodal-Gesture%20%2B%20Gaze%20%2B%20Voice-orange?style=flat-square)](#)
@@ -17,11 +17,11 @@
 
 ---
 
-## 🎯 Problem Statement
+##  Problem Statement
 
 Surgeons need to interact with medical imaging **without breaking sterility or workflow**.
 
-### 🔍 The Challenge
+###  The Challenge
 
 * Surgeons cannot touch screens or keyboards during sterile procedures
 * Traditional voice-only systems lack precision for medical imaging
@@ -31,7 +31,7 @@ Surgeons need to interact with medical imaging **without breaking sterility or w
 
 ---
 
-## 🚀 Our Solution: Zero-Touch Multimodal Surgeon Assistant
+##  Our Solution: Zero-Touch Multimodal Surgeon Assistant
 
 Zero-Touch is a **real-time, multimodal surgical assistant** that fuses **gesture tracking, gaze estimation, and voice commands** to enable hands-free, sterile interaction with medical imaging systems.
 
@@ -76,9 +76,9 @@ graph TD
 
 ---
 
-## ⭐ Key Features
+##  Key Features
 
-### � Real-Time Gesture Tracking
+###  Real-Time Gesture Tracking
 
 * **MediaPipe Hands** for precise hand landmark detection
 * Pinch, swipe, wave, and custom gesture recognition
@@ -87,7 +87,7 @@ graph TD
 
 ---
 
-### 👁️ Gaze Estimation & Screen Mapping
+###  Gaze Estimation & Screen Mapping
 
 * **MediaPipe Face Mesh** for eye landmark extraction
 * Real-time gaze direction estimation
@@ -97,7 +97,7 @@ graph TD
 
 ---
 
-### 🎙️ Voice Command Intelligence
+###  Voice Command Intelligence
 
 * **Whisper Tiny** for local, low-latency ASR
 * Lightweight LLM (Phi-2) for flexible command parsing
@@ -107,7 +107,7 @@ graph TD
 
 ---
 
-### 🧠 Multimodal Fusion Engine
+###  Multimodal Fusion Engine
 
 * Timestamp-aligned fusion of gesture + gaze + voice
 * Rule-based and transformer-based intent classification
@@ -117,7 +117,7 @@ graph TD
 
 ---
 
-### ⚡ Low-Latency Real-Time Processing
+###  Low-Latency Real-Time Processing
 
 * **<200ms** end-to-end latency target
 * Local-first processing (no cloud dependency)
@@ -127,7 +127,7 @@ graph TD
 
 ---
 
-### 🎯 Surgical Workflow Integration
+###  Surgical Workflow Integration
 
 * Sterile, hands-free operation
 * Medical image navigation (zoom, pan, scroll)
@@ -205,7 +205,7 @@ graph TD
 
 ---
 
-## 🔐 Ethics & Safety
+##  Ethics & Safety
 
 * Privacy-first architecture
 * User-controlled data
@@ -215,7 +215,7 @@ graph TD
 
 ---
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### Prerequisites
 
@@ -237,11 +237,11 @@ python main_audio.py
 
 ---
 
-## 🎙️ Voice Command Reference
+##  Voice Command Reference
 
 Speak naturally — Zero-Touch understands intent, not just exact words. Spatial words like **"here"**, **"this"**, or **"that"** automatically fuse with your current gaze direction.
 
-### 🖼️ Image Navigation
+###  Image Navigation
 
 | What to Say | Action |
 |---|---|
@@ -252,7 +252,7 @@ Speak naturally — Zero-Touch understands intent, not just exact words. Spatial
 | `"Previous image"` | Switch to the previous scan |
 | `"Reset"` / `"Reset view"` | Return to the default zoom and position |
 
-### 🔬 AI-Powered Analysis
+###  AI-Powered Analysis
 
 | What to Say | Action |
 |---|---|
@@ -262,7 +262,7 @@ Speak naturally — Zero-Touch understands intent, not just exact words. Spatial
 | `"Show CT"` / `"Show MRI"` / `"Show X-ray"` | Load a specific scan type |
 | `"Open patient file"` | Load the patient's imaging record |
 
-### 🧠 Clinical Knowledge (Q&A)
+###  Clinical Knowledge (Q&A)
 
 | What to Say | Action |
 |---|---|
@@ -273,7 +273,7 @@ Speak naturally — Zero-Touch understands intent, not just exact words. Spatial
 
 > Any medical question is detected automatically — just speak it naturally.
 
-### 📋 Session Management
+###  Session Management
 
 | What to Say | Action |
 |---|---|
@@ -291,13 +291,13 @@ Speak naturally — Zero-Touch understands intent, not just exact words. Spatial
 | **Pinky Pointing** | Next image |
 | **Thumb Pointing** | Previous image |
 
-> **💡 Tip:** Combine voice + gaze for precision. Say *"zoom in here"* while looking at a specific region of the scan to zoom into exactly that area.
+> ** Tip:** Combine voice + gaze for precision. Say *"zoom in here"* while looking at a specific region of the scan to zoom into exactly that area.
 
 ---
 
-## 📸 Project Components
+##  Project Components
 
-## 🎯 Use Cases
+##  Use Cases
 
 * **Sterile Surgical Procedures**: Navigate medical imaging without breaking sterility
 * **Operating Room Workflows**: Hands-free control during active surgery
@@ -308,7 +308,7 @@ Speak naturally — Zero-Touch understands intent, not just exact words. Spatial
 
 ---
 
-## 🏆 Innovation Highlights
+##  Innovation Highlights
 
 * **Multimodal Fusion**: First-of-its-kind gesture + gaze + voice integration for surgery
 * **Real-Time Performance**: <200ms latency for surgical-grade responsiveness
@@ -319,7 +319,7 @@ Speak naturally — Zero-Touch understands intent, not just exact words. Spatial
 
 ---
 
-## 👨‍💻 Project Collaborators
+##  Project Collaborators
 
 <table align="center">
 <tr>
@@ -328,17 +328,17 @@ Speak naturally — Zero-Touch understands intent, not just exact words. Spatial
 <th>GitHub</th>
 </tr>
 <tr>
-<td><b>🎯 Vision & Gaze Lead</b><br/><i>Gesture Tracking, Eye Tracking, Visual Feedback</i></td>
+<td><b> Vision & Gaze Lead</b><br/><i>Gesture Tracking, Eye Tracking, Visual Feedback</i></td>
 <td><b>Raghavan</b></td>
 <td><a href="https://github.com/Raghavan7777"><img src="https://img.shields.io/badge/GitHub-Profile-181717?style=flat-square&logo=github"></a></td>
 </tr>
 <tr>
-<td><b>🎙️ Audio & Intent Lead</b><br/><i>Voice Recognition, Command Parsing, AI Integration</i></td>
+<td><b> Audio & Intent Lead</b><br/><i>Voice Recognition, Command Parsing, AI Integration</i></td>
 <td><b>Yeswanth Ram</b></td>
 <td><a href="https://github.com/Yeswanthram28"><img src="https://img.shields.io/badge/GitHub-Profile-181717?style=flat-square&logo=github"></a></td>
 </tr>
 <tr>
-<td><b>🧠 Fusion & Integration Lead</b><br/><i>Multimodal Fusion, System Integration, Testing</i></td>
+<td><b> Fusion & Integration Lead</b><br/><i>Multimodal Fusion, System Integration, Testing</i></td>
 <td><b>VetriSelvan</b></td>
 <td><a href="https://github.com/njr-vetri"><img src="https://img.shields.io/badge/GitHub-Profile-181717?style=flat-square&logo=github"></a></td>
 </tr>
